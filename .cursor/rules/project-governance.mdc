@@ -1,0 +1,23 @@
+---
+description: Authority, language, workflow, verification and git governance for Akieni PMO.
+alwaysApply: true
+---
+
+# Project governance
+
+- **Source of truth:** `CLAUDE.md` (root) is authoritative; a violation is a defect.
+  Product spec is in `docs/product/`. Read the relevant canonical doc before non-trivial work.
+- **Language:** English for code, identifiers, comments, commit messages, API/error
+  messages and error codes. French for `docs/` and for UI copy. **No emoji, no em dash
+  (`—`)** anywhere - use `-`, `:` or reword.
+- **Scope discipline:** minimal, task-scoped diffs. No opportunistic refactors. Do not add
+  unsolicited Markdown (`CHANGES.md`, implementation notes, reports). When behavior changes,
+  update the canonical doc in the same change set.
+- **Verification before "done"/PR:** `pnpm lint`, `pnpm format:check`, `pnpm typecheck`,
+  `pnpm test` all green (plus `pnpm test:coverage` for a PR). No `--no-verify`, no
+  `@ts-ignore`/`@ts-expect-error`/`eslint-disable` to force a pass; rare suppressions carry
+  `// SAFETY: <reason>`.
+- **Dependencies:** `pnpm add` only. Local Postgres runs in DBngin (no Docker);
+  set `DATABASE_URL`.
+- **Git:** Conventional Commits `type(scope): subject` (English, imperative, <=72 chars),
+  no AI footprint. Branch from `develop`. Never commit/push/force-push without explicit approval.

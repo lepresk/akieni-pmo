@@ -1,0 +1,16 @@
+---
+description: PostgreSQL access via Drizzle ORM, schema and migrations.
+globs: src/lib/db/**,src/lib/**/*-server.ts,src/lib/**/*-actions.ts,drizzle.config.ts
+---
+
+# Database (Drizzle / PostgreSQL)
+
+- Schema lives in `src/lib/db/schema/`; a single Drizzle client in `src/lib/db`.
+- **All schema changes go through migrations:** `pnpm db:generate` then `pnpm db:migrate`,
+  one migration per logical change, descriptive name. Do not hand-edit generated SQL.
+- DB access is owned by `*-server.ts` (reads) and `*-actions.ts` (writes), never by
+  components or the transport layer. Parameterized queries only.
+- Money in minor units with branded types. Prefer explicit column types and constraints
+  (FK, defaults, checks) in the schema - tests assert against the real constraints.
+- Reference/rate values are **dated** (effective-from); a change never rewrites already
+  billed periods.

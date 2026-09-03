@@ -1,0 +1,11 @@
+#!/bin/sh
+
+# Strip any auto-injected AI co-author trailers before the commit is finalized.
+# Project policy forbids AI co-author footprints in commit messages.
+# Covers Cursor, Claude, Codex, Copilot, ChatGPT/OpenAI, Anthropic and Gemini.
+
+msg_file="$1"
+tmp_file="$(mktemp)"
+
+grep -viE '^Co-authored-by:[[:space:]]+(Cursor|Claude|Codex|Copilot|ChatGPT|OpenAI|Anthropic|Gemini)[[:space:]]*<' "$msg_file" > "$tmp_file"
+mv "$tmp_file" "$msg_file"

@@ -1,0 +1,28 @@
+---
+description: Next.js App Router server-first architecture, Server Actions, UI/UX contract.
+globs: src/app/**,src/components/**,src/lib/**,src/hooks/**
+---
+
+# Next.js server-first
+
+## Architecture
+- **Server Components by default.** Add `'use client'` only for real interactivity; push
+  client boundaries to the leaves.
+- **Thin transport:** Server Actions and Route Handlers do parse (Zod) -> invoke
+  action/server function -> serialize. **No business logic in the transport layer.**
+- `src/lib/<feature>/` suffixes: `*-server.ts` (reads, owns Drizzle queries), `*-actions.ts`
+  (`'use server'` mutations - one entry point, Zod input, typed output with an explicit
+  failure variant), `*-schemas.ts` (Zod), `*-display.ts` (pure formatting), `*-permissions.ts`.
+- Components never import Drizzle; only `*-server.ts` / `*-actions.ts` / `src/lib/db` do.
+- **Authorization is server-side** (field + row level), including exports. Sensitive data
+  (salaries, loaded cost, reference TJM, margin) is filtered before serialization, never only
+  hidden in the UI.
+
+## UI/UX
+- Every screen handles **loading, empty, success, error** explicitly; distinguish "empty"
+  from "no results after filtering". No silent failures; contextual error copy.
+- Destructive/state-changing actions require a confirmation dialog. Mutations disable the
+  trigger and show loading.
+- Forms: React Hook Form + Zod resolver, validation on blur, accessible labels.
+- Tables/lists are server-driven (pagination/search/sort); filter state lives in the URL.
+- Professional French UI, no emoji, no em dash. Deterministic rendering.

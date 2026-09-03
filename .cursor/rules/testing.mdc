@@ -1,0 +1,17 @@
+---
+description: Mandatory testing policy (Vitest, real Postgres, AAA).
+alwaysApply: true
+---
+
+# Testing
+
+- **AAA only** - Arrange, Act, Assert as three separated blocks. English behavior-describing
+  names (`it('rejects a timesheet entry on a locked period')`), never `test1`.
+- **PostgreSQL is not mocked:** isolated test database (`DATABASE_URL_TEST`) with
+  transactional rollback or schema reset between tests. After every write, assert against
+  **persisted DB state**, not the return value alone.
+- **External systems are mocked** (Google OAuth, email, Slack, third-party HTTP).
+- Validate responses with the **same Zod schemas** as the runtime contract.
+- Cover happy path, every failure path, weird paths (concurrency, retries, partial state),
+  and edge cases. Coverage gate on `src/lib`: >=80% lines/statements/functions, >=70% branches.
+- Edit tests in the same change as the behavior/schema they cover. A red test blocks the change.

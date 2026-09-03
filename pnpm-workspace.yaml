@@ -1,0 +1,5 @@
+# Single-app repo. This file is present so pnpm reads workspace-level settings
+# (its new home for options such as onlyBuiltDependencies).
+onlyBuiltDependencies:
+  - esbuild
+  - sharp

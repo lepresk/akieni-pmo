@@ -1,0 +1,19 @@
+---
+description: TypeScript strictness, Zod at boundaries, and naming conventions.
+globs: **/*.ts,**/*.tsx
+---
+
+# TypeScript strict
+
+- Never relax `tsconfig.json`. **Never `any`** -> `unknown` + narrowing. **Avoid `!`** ->
+  handle null/undefined or justify with `// SAFETY: <reason>`.
+- Prefer `readonly`. Use **discriminated unions** for states/results, never parallel boolean
+  flags. Use **branded types** for IDs and money. `satisfies` to constrain literals; `as`
+  only after a runtime guard. No magic numbers/strings.
+- **Zod at every boundary:** Server Action args and form data, Route Handler bodies/params,
+  external API responses, and env (parsed once in `src/lib/env.ts`). Infer internal types via
+  `z.infer`. Never scatter `process.env.X` in business logic. Contract objects use `.strict()`.
+- **Naming:** modules/utils `kebab-case.ts`; React components `PascalCase.tsx`; tests
+  `*.test.ts` / `*.spec.ts`. `PascalCase` types/components, `camelCase` functions/vars,
+  `SCREAMING_SNAKE_CASE` only for true constants. Named exports (default only where Next.js
+  requires it: `page`/`layout`/`route`/`middleware`/config).

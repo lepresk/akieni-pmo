@@ -1,0 +1,17 @@
+---
+description: Comment and JSDoc standards. English only.
+alwaysApply: true
+---
+
+# Comments & documentation
+
+- Comments only at file, class, function/method, and non-obvious block level. No inline
+  comments restating obvious code. **All comments in English.**
+- Forbidden: conversational tone, jokes, emoji, em dash (`—`), decorative banners, and
+  `TODO`/`FIXME` without a ticket reference.
+- Justified when: file purpose is unclear, behavior is non-obvious / has edge cases, a class
+  encapsulates a non-trivial concept, or a block is surprising (workaround, ordering invariant,
+  perf trick, encoded business rule).
+- **JSDoc** module-level for any file with significant logic; on public/non-trivial functions
+  when params/return/contract are not self-evident. Trivial private helpers do not need it.
+- Do not create or extend Markdown under `docs/` or the repo root unless explicitly requested.
