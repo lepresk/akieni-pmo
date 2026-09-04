@@ -105,6 +105,11 @@ Objects that act as API/response contracts use `.strict()` to catch field leaks.
 ## 8. UI / UX
 
 - Calm, professional, "banking-grade" French voice. No emoji, no em dash.
+- **Styling:** CSS tokens in `src/app/globals.css` (source of truth) mapped into Tailwind
+  via `@theme inline`. Build screens from `src/components/ui/` primitives + Tailwind
+  utilities. **Do not** paste local `style={{}}` chrome objects (`mono`, `btn`, `card`).
+  Allowed `style={{}}` only for dynamic escapes (progress %, data-driven
+  `gridTemplateColumns`, colors from `loadColor` / `marginColor` / free-form dots).
 - Every screen handles four states explicitly: **loading, empty, success, error**.
   Distinguish "empty" from "no results after filtering".
 - **Destructive or state-changing actions** require a confirmation dialog (cancel +

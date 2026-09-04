@@ -1,40 +1,9 @@
 import type { ReactElement } from 'react';
 
+import { Card, MonoLabel, Stack, Text } from '@/components/ui';
 import { pct } from '@/lib/display';
 import { getReporting } from '@/lib/reporting/reporting-server';
 import { getSession } from '@/lib/session';
-
-const mono = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 10,
-  letterSpacing: '0.14em',
-  textTransform: 'uppercase' as const,
-  color: 'var(--muted)',
-};
-
-function Card({
-  title,
-  children,
-}: {
-  readonly title: string;
-  readonly children: ReactElement;
-}): ReactElement {
-  return (
-    <div
-      style={{
-        border: '1px solid var(--line-light)',
-        background: 'var(--white)',
-        padding: 22,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
-      }}
-    >
-      <span style={mono}>{title}</span>
-      {children}
-    </div>
-  );
-}
 
 export default async function ReportingPage(): Promise<ReactElement> {
   const { role } = await getSession();
@@ -42,70 +11,66 @@ export default async function ReportingPage(): Promise<ReactElement> {
   const budgetPct = budget.budgetDays > 0 ? (budget.spentDays / budget.budgetDays) * 100 : 0;
 
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-        gap: 16,
-      }}
-    >
-      <Card title="Chargeabilité moyenne">
-        <>
-          <span style={{ fontSize: 40, fontWeight: 600, letterSpacing: '-0.045em' }}>
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
+      <Card padding="none" className="p-[22px]">
+        <Stack gap={12}>
+          <MonoLabel>Chargeabilité moyenne</MonoLabel>
+          <Text size="display" weight={600}>
             {charge.average} %
-          </span>
-          <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+          </Text>
+          <Text size="xs" tone="muted">
             Cible 85 % sur 8 semaines glissantes
-          </span>
-        </>
+          </Text>
+        </Stack>
       </Card>
 
-      <Card title="Allocation des équipes">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Overbookés</span>
-            <span style={{ fontFamily: 'var(--font-mono)', color: '#b3261e' }}>
-              {charge.overbooked}
-            </span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Optimal</span>
-            <span style={{ fontFamily: 'var(--font-mono)' }}>{charge.optimal}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Sous-bookés</span>
-            <span style={{ fontFamily: 'var(--font-mono)' }}>{charge.under}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Bench</span>
-            <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--muted)' }}>
-              {charge.bench}
-            </span>
-          </div>
-        </div>
+      <Card padding="none" className="p-[22px]">
+        <Stack gap={12}>
+          <MonoLabel>Allocation des équipes</MonoLabel>
+          <Stack gap={8} className="gap-1.5 text-[13px]">
+            <div className="flex justify-between">
+              <span>Overbookés</span>
+              <span className="text-danger font-mono">{charge.overbooked}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Optimal</span>
+              <span className="font-mono">{charge.optimal}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Sous-bookés</span>
+              <span className="font-mono">{charge.under}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Bench</span>
+              <span className="text-muted font-mono">{charge.bench}</span>
+            </div>
+          </Stack>
+        </Stack>
       </Card>
 
-      <Card title="Budget vs réel (portefeuille)">
-        <>
-          <span style={{ fontSize: 40, fontWeight: 600, letterSpacing: '-0.045em' }}>
+      <Card padding="none" className="p-[22px]">
+        <Stack gap={12}>
+          <MonoLabel>Budget vs réel (portefeuille)</MonoLabel>
+          <Text size="display" weight={600}>
             {pct(budgetPct)}
-          </span>
-          <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+          </Text>
+          <Text size="xs" tone="muted">
             {budget.spentDays} j consommés / {budget.budgetDays} j budgétés
-          </span>
-        </>
+          </Text>
+        </Stack>
       </Card>
 
       {marginPortfolio !== null && (
-        <Card title="Marge portefeuille">
-          <>
-            <span style={{ fontSize: 40, fontWeight: 600, letterSpacing: '-0.045em' }}>
+        <Card padding="none" className="p-[22px]">
+          <Stack gap={12}>
+            <MonoLabel>Marge portefeuille</MonoLabel>
+            <Text size="display" weight={600}>
               {marginPortfolio} %
-            </span>
-            <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+            </Text>
+            <Text size="xs" tone="muted">
               Moyenne des projets facturables (1 - coût)
-            </span>
-          </>
+            </Text>
+          </Stack>
         </Card>
       )}
     </div>

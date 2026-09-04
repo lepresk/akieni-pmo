@@ -1,6 +1,7 @@
 /** Navigation model for the app shell, mirroring the prototype's sidebar and titles. */
 
 import type { IconName } from '@/components/icons';
+import { getWeekSnapshot, shiftWeekSnapshot } from '@/lib/calendar/week-display';
 
 export interface NavItem {
   readonly key: string;
@@ -44,17 +45,44 @@ export const SCREEN_TITLES: Readonly<Record<string, string>> = {
   '/audit': "Journal d'audit",
 };
 
-/** Mono metadata shown next to the screen title in the topbar. */
-export const SCREEN_META: Readonly<Record<string, string>> = {
-  '/saisie': 'Semaine 31 · 24,5 h saisies',
-  '/validations': 'Semaine 30 · à valider',
+const STATIC_SCREEN_META: Readonly<Record<string, string>> = {
   '/conges': '2 demandes en attente',
   '/projets': '7 projets · 4 actifs',
   '/depenses': 'Registre comptable',
-  '/capacite': 'S31 → S38',
   '/reporting': 'Portefeuille · 8 semaines',
-  '/facturation': 'Période juillet 2026',
   '/audit': 'Gouvernance · conservation 5 ans',
   '/notifications': '3 non lues',
 };
 
+/** Mono metadata next to the screen title (date-aware where the label depends on the calendar). */
+export function getScreenMeta(pathname: string, now: Date = new Date()): string | undefined {
+  const week = getWeekSnapshot(now);
+  if (pathname === '/saisie') return `${week.shortLabel} · semaine en cours`;
+  if (pathname === '/validations') {
+    const prev = shiftWeekSnapshot(week.mondayIso, -1);
+    return `${prev.shortLabel} · à valider`;
+  }
+  if (pathname === '/capacite') {
+    const end = shiftWeekSnapshot(week.mondayIso, 7);
+    return `${week.shortLabel} → ${end.shortLabel}`;
+  }
+  if (pathname === '/facturation') {
+    const months = [
+      'janvier',
+      'février',
+      'mars',
+      'avril',
+      'mai',
+      'juin',
+      'juillet',
+      'août',
+      'septembre',
+      'octobre',
+      'novembre',
+      'décembre',
+    ] as const;
+    const month = months[now.getMonth()] ?? '';
+    return `Période ${month} ${now.getFullYear()}`;
+  }
+  return STATIC_SCREEN_META[pathname];
+}

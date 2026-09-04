@@ -2,19 +2,33 @@ import type { Route } from 'next';
 import Link from 'next/link';
 import type { ReactElement } from 'react';
 
+import {
+  Badge,
+  Button,
+  Card,
+  DataTable,
+  DataTableCell,
+  DataTableRow,
+  EmptyState,
+  FormRow,
+  Input,
+  KpiGrid,
+  KpiTile,
+  KvList,
+  KvRow,
+  LinkButton,
+  MonoLabel,
+  PageSection,
+  ProgressBar,
+  Select,
+  Tabs,
+} from '@/components/ui';
+import { cn } from '@/lib/cn';
 import { marginColor, marginFromCostLoad, modelLabel, pct, segmentLabel, xaf } from '@/lib/display';
 import { approveAmendment, createAmendment } from '@/lib/projects/amendments-actions';
 import { getProjectHub } from '@/lib/projects/project-detail-server';
 import { canEditBudget, canMargin } from '@/lib/rbac';
 import { getSession } from '@/lib/session';
-
-const mono = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 10,
-  letterSpacing: '0.14em',
-  textTransform: 'uppercase' as const,
-  color: 'var(--muted)',
-};
 
 const NATURE_LABELS: Readonly<Record<string, string>> = {
   program: 'Programme',
@@ -24,31 +38,11 @@ const NATURE_LABELS: Readonly<Record<string, string>> = {
 type Tab =
   'apercu' | 'sousprojets' | 'planning' | 'temps' | 'ressources' | 'budget' | 'atterrissage';
 
-const card = { border: '1px solid var(--line-light)', background: 'var(--white)' } as const;
-
-function Progress({ value }: { readonly value: number }): ReactElement {
-  return (
-    <span
-      style={{
-        position: 'relative',
-        display: 'inline-block',
-        width: 90,
-        height: 6,
-        background: '#efefec',
-        verticalAlign: 'middle',
-      }}
-    >
-      <span
-        style={{
-          position: 'absolute',
-          inset: '0 auto 0 0',
-          width: `${Math.min(100, value)}%`,
-          background: value >= 100 ? 'var(--green)' : 'var(--black)',
-        }}
-      />
-    </span>
-  );
-}
+const NODE_COLUMNS = '1fr auto';
+const PLANNING_COLUMNS = '1fr 50px 90px 44px';
+const TIME_COLUMNS = '1.4fr 1.2fr 1.8fr 0.6fr';
+const RESOURCE_COLUMNS = '2fr 1fr 1fr 1fr';
+const COMPLETE_PROGRESS_PCT = 100;
 
 export default async function ProjectHubPage({
   params,
@@ -63,7 +57,7 @@ export default async function ProjectHubPage({
   const scope = query.node ?? null;
   const hub = await getProjectHub(id, role, scope);
 
-  if (!hub) return <div style={{ padding: 22, color: 'var(--muted)' }}>Projet introuvable.</div>;
+  if (!hub) return <EmptyState>Projet introuvable.</EmptyState>;
 
   const isProgram = hub.nature === 'program';
   const tabs: readonly { readonly key: Tab; readonly label: string }[] = [
@@ -81,6 +75,8 @@ export default async function ProjectHubPage({
   const tabHref = (key: Tab): Route =>
     `/projets/${id}?tab=${key}${scope ? `&node=${encodeURIComponent(scope)}` : ''}` as Route;
 
+  const tabItems = tabs.map((t) => ({ key: t.key, label: t.label, href: tabHref(t.key) }));
+
   const scopedBudgetDays = scope
     ? (hub.nodes.find((n) => n.name === scope)?.budgetDays ?? 0)
     : hub.budgetDays;
@@ -90,57 +86,30 @@ export default async function ProjectHubPage({
   const gap = eac - hub.budgetDays;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ ...card, padding: '22px 24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+    <PageSection>
+      <Card padding="none" className="px-6 py-[22px]">
+        <div className="flex flex-wrap items-center gap-3">
           {scope && (
-            <Link
-              href={tabHref('apercu').replace(/&node=.*/, '') as Route}
-              style={{ ...mono, color: 'var(--cyan-teal)' }}
-            >
-              ← Programme
+            <Link href={tabHref('apercu').replace(/&node=.*/, '') as Route}>
+              <MonoLabel tone="accent">← Programme</MonoLabel>
             </Link>
           )}
-          <h1 style={{ fontSize: 24, fontWeight: 600, letterSpacing: '-0.03em' }}>
-            {scope ?? hub.name}
-          </h1>
-          <span style={{ ...mono, border: '1px solid var(--line-light)', padding: '3px 8px' }}>
+          <h1 className="text-[24px] font-semibold tracking-[-0.03em]">{scope ?? hub.name}</h1>
+          <Badge tone="muted">
             {scope ? 'Sous-projet' : `${hub.code} · ${NATURE_LABELS[hub.nature] ?? hub.nature}`}
-          </span>
+          </Badge>
         </div>
         {!scope && hub.description && (
-          <p
-            style={{
-              marginTop: 10,
-              fontSize: 14,
-              color: 'var(--muted)',
-              lineHeight: 1.6,
-              maxWidth: 720,
-            }}
-          >
+          <p className="text-muted mt-2.5 max-w-[720px] text-[14px] leading-[1.6]">
             {hub.description}
           </p>
         )}
-      </div>
+      </Card>
 
-      <div
-        style={{ display: 'flex', borderBottom: '1px solid var(--line-light)', flexWrap: 'wrap' }}
-      >
-        {tabs.map((t) => (
-          <Link key={t.key} href={tabHref(t.key)} className="ak-tab" data-active={t.key === tab}>
-            {t.label}
-          </Link>
-        ))}
-      </div>
+      <Tabs items={tabItems} activeKey={tab} className="flex-wrap" />
 
       {tab === 'apercu' && (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            ...card,
-          }}
-        >
+        <KpiGrid>
           {[
             { label: 'Client', value: hub.clientName },
             { label: 'Segment', value: segmentLabel(hub.segment) },
@@ -149,427 +118,259 @@ export default async function ProjectHubPage({
             { label: 'Budget', value: `${scopedBudgetDays} j` },
             { label: 'Postes de coût', value: String(hub.costCenters.length) },
           ].map((fact) => (
-            <div
+            <KpiTile
               key={fact.label}
-              style={{
-                padding: '18px 22px',
-                borderRight: '1px solid var(--line-light)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 6,
-              }}
-            >
-              <span style={mono}>{fact.label}</span>
-              <span style={{ fontSize: 15 }}>{fact.value}</span>
-            </div>
+              label={fact.label}
+              value={<span className="text-[15px] font-normal tracking-normal">{fact.value}</span>}
+              className="px-[22px] py-[18px]"
+            />
           ))}
-        </div>
+        </KpiGrid>
       )}
 
       {tab === 'sousprojets' && (
-        <div style={card}>
+        <Card padding="none">
           {hub.nodes.map((node) => (
-            <div
-              key={node.name}
-              style={{
-                padding: '16px 22px',
-                borderBottom: '1px solid var(--line-light)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 16,
-              }}
-            >
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 500 }}>{node.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+            <DataTableRow key={node.name} columns={NODE_COLUMNS} className="py-4">
+              <DataTableCell stack>
+                <span className="text-[14px] font-medium">{node.name}</span>
+                <span className="text-muted text-[12px]">
                   PM {node.pmName ?? '-'} · {node.budgetDays} j
-                </div>
-              </div>
-              <Link
-                href={`/projets/${id}?tab=budget&node=${encodeURIComponent(node.name)}` as Route}
-                style={{
-                  ...mono,
-                  border: '1px solid var(--line-light)',
-                  padding: '8px 12px',
-                  color: 'var(--ink)',
-                }}
-              >
-                Piloter →
-              </Link>
-            </div>
+                </span>
+              </DataTableCell>
+              <DataTableCell align="end">
+                <LinkButton
+                  href={`/projets/${id}?tab=budget&node=${encodeURIComponent(node.name)}` as Route}
+                  className="tracking-label font-mono text-[10px] uppercase"
+                >
+                  Piloter →
+                </LinkButton>
+              </DataTableCell>
+            </DataTableRow>
           ))}
-          {hub.nodes.length === 0 && (
-            <div style={{ padding: 22, fontSize: 13, color: 'var(--muted)' }}>
-              Projet simple, sans sous-projets.
-            </div>
-          )}
-        </div>
+          {hub.nodes.length === 0 && <EmptyState>Projet simple, sans sous-projets.</EmptyState>}
+        </Card>
       )}
 
       {tab === 'planning' && (
-        <div style={card}>
+        <Card padding="none">
           {hub.activities.map((act, index) => (
-            <div
+            <DataTableRow
               key={`${act.name}-${index}`}
-              style={{
-                padding: '13px 22px',
-                borderBottom: '1px solid var(--line-light)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 14,
-                flexWrap: 'wrap',
-              }}
+              columns={PLANNING_COLUMNS}
+              className="gap-x-3.5 py-[13px]"
             >
-              <div style={{ flex: '1 1 260px' }}>
-                <div style={{ fontSize: 13 }}>{act.name}</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+              <DataTableCell stack>
+                <span>{act.name}</span>
+                <span className="text-muted text-[11px]">
                   {act.poste} · {act.responsible} · S{31 + act.fromWeek} → S{31 + act.toWeek}
-                </div>
-              </div>
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 12,
-                  width: 50,
-                  textAlign: 'right',
-                }}
-              >
+                </span>
+              </DataTableCell>
+              <DataTableCell align="end" className="font-mono text-[12px]">
                 {act.days} j
-              </span>
-              <Progress value={act.progress} />
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 12,
-                  width: 44,
-                  textAlign: 'right',
-                }}
-              >
+              </DataTableCell>
+              <DataTableCell>
+                {/* Full completion is a success signal here, so the danger threshold is off. */}
+                <ProgressBar
+                  value={act.progress}
+                  width={90}
+                  dangerAbove={Number.POSITIVE_INFINITY}
+                  completeClassName={
+                    act.progress >= COMPLETE_PROGRESS_PCT ? 'bg-green' : 'bg-black'
+                  }
+                />
+              </DataTableCell>
+              <DataTableCell align="end" className="font-mono text-[12px]">
                 {act.progress} %
-              </span>
-            </div>
+              </DataTableCell>
+            </DataTableRow>
           ))}
-        </div>
+        </Card>
       )}
 
       {tab === 'temps' && (
-        <div style={card}>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1.4fr 1.2fr 1.8fr 0.6fr',
-              columnGap: 16,
-              padding: '12px 22px',
-              borderBottom: '1px solid var(--line-light)',
-              background: 'var(--paper)',
-              ...mono,
-            }}
-          >
-            <span>Personne</span>
-            <span>Poste</span>
-            <span>Tâche</span>
-            <span style={{ textAlign: 'right' }}>Heures</span>
-          </div>
+        <DataTable
+          columns={TIME_COLUMNS}
+          header={
+            <>
+              <MonoLabel>Personne</MonoLabel>
+              <MonoLabel>Poste</MonoLabel>
+              <MonoLabel>Tâche</MonoLabel>
+              <MonoLabel className="text-right">Heures</MonoLabel>
+            </>
+          }
+        >
           {hub.timeLines.map((line, index) => (
-            <div
-              key={index}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1.4fr 1.2fr 1.8fr 0.6fr',
-                columnGap: 16,
-                padding: '12px 22px',
-                borderBottom: '1px solid var(--line-light)',
-              }}
-            >
-              <span style={{ fontSize: 13 }}>{line.person}</span>
-              <span style={{ fontSize: 12, color: 'var(--muted)' }}>{line.poste}</span>
-              <span style={{ fontSize: 12 }}>{line.task}</span>
-              <span style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+            <DataTableRow key={index} columns={TIME_COLUMNS}>
+              <DataTableCell>{line.person}</DataTableCell>
+              <DataTableCell tone="muted" className="text-[12px]">
+                {line.poste}
+              </DataTableCell>
+              <DataTableCell className="text-[12px]">{line.task}</DataTableCell>
+              <DataTableCell align="end" className="font-mono text-[12px]">
                 {line.hours} h
-              </span>
-            </div>
+              </DataTableCell>
+            </DataTableRow>
           ))}
           {hub.timeLines.length === 0 && (
-            <div style={{ padding: 22, fontSize: 13, color: 'var(--muted)' }}>
-              Aucune écriture de temps validée sur ce projet.
-            </div>
+            <EmptyState>Aucune écriture de temps validée sur ce projet.</EmptyState>
           )}
-        </div>
+        </DataTable>
       )}
 
       {tab === 'ressources' && (
-        <div style={card}>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '2fr 1fr 1fr 1fr',
-              columnGap: 16,
-              padding: '12px 22px',
-              borderBottom: '1px solid var(--line-light)',
-              background: 'var(--paper)',
-              ...mono,
-            }}
-          >
-            <span>Collaborateur</span>
-            <span>Allocation</span>
-            <span>TJM projet</span>
-            <span style={{ textAlign: 'right' }}>Séniorité</span>
-          </div>
+        <DataTable
+          columns={RESOURCE_COLUMNS}
+          header={
+            <>
+              <MonoLabel>Collaborateur</MonoLabel>
+              <MonoLabel>Allocation</MonoLabel>
+              <MonoLabel>TJM projet</MonoLabel>
+              <MonoLabel className="text-right">Séniorité</MonoLabel>
+            </>
+          }
+        >
           {hub.assignments.map((res, index) => (
-            <div
-              key={`${res.employeeName}-${index}`}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '2fr 1fr 1fr 1fr',
-                columnGap: 16,
-                padding: '12px 22px',
-                borderBottom: '1px solid var(--line-light)',
-              }}
-            >
-              <span style={{ fontSize: 13 }}>{res.employeeName}</span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+            <DataTableRow key={`${res.employeeName}-${index}`} columns={RESOURCE_COLUMNS}>
+              <DataTableCell>{res.employeeName}</DataTableCell>
+              <DataTableCell className="font-mono text-[12px]">
                 {pct(res.allocationPct)}
-              </span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+              </DataTableCell>
+              <DataTableCell className="font-mono text-[12px]">
                 {res.projectTjm !== null ? xaf(res.projectTjm) : '-'}
-              </span>
-              <span style={{ textAlign: 'right', fontSize: 12, color: 'var(--muted)' }}>
+              </DataTableCell>
+              <DataTableCell align="end" tone="muted" className="text-[12px]">
                 {res.seniority ?? '-'}
-              </span>
-            </div>
+              </DataTableCell>
+            </DataTableRow>
           ))}
-        </div>
+        </DataTable>
       )}
 
       {tab === 'budget' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              ...card,
-            }}
-          >
+        <PageSection>
+          <KpiGrid>
             {[
               { label: "Main d'œuvre", value: hub.envelope.mo },
               { label: 'Achats', value: hub.envelope.achats },
               { label: 'Frais de mission', value: hub.envelope.mission },
               { label: 'Enveloppe totale', value: envelopeTotal },
             ].map((tile) => (
-              <div
+              <KpiTile
                 key={tile.label}
-                style={{
-                  padding: '20px 22px',
-                  borderRight: '1px solid var(--line-light)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 6,
-                }}
-              >
-                <span style={mono}>{tile.label}</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 600 }}>
-                  {xaf(tile.value)}
-                </span>
-              </div>
+                label={tile.label}
+                value={
+                  <span className="font-mono text-[18px] font-semibold tracking-normal">
+                    {xaf(tile.value)}
+                  </span>
+                }
+                className="px-[22px] py-5"
+              />
             ))}
-          </div>
-          <div
-            style={{
-              ...card,
-              padding: 22,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 10,
-              fontSize: 13,
-            }}
-          >
-            <span style={mono}>Dépenses {scope ? `· ${scope}` : ''}</span>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>Engagé (non consommé)</span>
-              <span style={{ fontFamily: 'var(--font-mono)' }}>{xaf(hub.spend.engage)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>Consommé (facturé + payé)</span>
-              <span style={{ fontFamily: 'var(--font-mono)' }}>{xaf(consumed)}</span>
-            </div>
-            {hub.costLoad !== null && (
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Marge projet</span>
-                <span style={{ fontFamily: 'var(--font-mono)', color: marginColor(hub.costLoad) }}>
-                  {marginFromCostLoad(hub.costLoad)} %
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
+          </KpiGrid>
+          <Card padding="none" className="p-[22px]">
+            <MonoLabel>Dépenses {scope ? `· ${scope}` : ''}</MonoLabel>
+            <KvList className="mt-2.5">
+              <KvRow
+                label="Engagé (non consommé)"
+                value={<span className="font-mono">{xaf(hub.spend.engage)}</span>}
+              />
+              <KvRow
+                label="Consommé (facturé + payé)"
+                value={<span className="font-mono">{xaf(consumed)}</span>}
+              />
+              {hub.costLoad !== null && (
+                <KvRow
+                  label="Marge projet"
+                  value={
+                    <span className="font-mono" style={{ color: marginColor(hub.costLoad) }}>
+                      {marginFromCostLoad(hub.costLoad)} %
+                    </span>
+                  }
+                />
+              )}
+            </KvList>
+          </Card>
+        </PageSection>
       )}
 
       {tab === 'atterrissage' && (
-        <div
-          style={{
-            ...card,
-            padding: 22,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 12,
-            fontSize: 14,
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Budget</span>
-            <span style={{ fontFamily: 'var(--font-mono)' }}>{hub.budgetDays} j</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Consommé</span>
-            <span style={{ fontFamily: 'var(--font-mono)' }}>{hub.spentDays} j</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Reste à faire (ETC, déduit du planning)</span>
-            <span style={{ fontFamily: 'var(--font-mono)' }}>{hub.etcDays} j</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
-            <span>Atterrissage (EAC)</span>
-            <span style={{ fontFamily: 'var(--font-mono)' }}>{eac} j</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Écart au budget</span>
-            <span
-              style={{ fontFamily: 'var(--font-mono)', color: gap > 0 ? '#b3261e' : 'var(--ink)' }}
-            >
-              {gap > 0 ? '+' : ''}
-              {gap} j · {gap > 0 ? 'dépassement' : 'dans le budget'}
-            </span>
-          </div>
-          <div style={{ marginTop: 8, borderTop: '1px solid var(--line-light)', paddingTop: 12 }}>
-            <span style={mono}>Avenants</span>
+        <Card padding="none" className="p-[22px] text-[14px]">
+          <KvList>
+            <KvRow label="Budget" value={<span className="font-mono">{hub.budgetDays} j</span>} />
+            <KvRow label="Consommé" value={<span className="font-mono">{hub.spentDays} j</span>} />
+            <KvRow
+              label="Reste à faire (ETC, déduit du planning)"
+              value={<span className="font-mono">{hub.etcDays} j</span>}
+            />
+            <KvRow
+              label="Atterrissage (EAC)"
+              strong
+              value={<span className="font-mono">{eac} j</span>}
+            />
+            <KvRow
+              label="Écart au budget"
+              value={
+                <span className={cn('font-mono', gap > 0 && 'text-danger')}>
+                  {gap > 0 ? '+' : ''}
+                  {gap} j · {gap > 0 ? 'dépassement' : 'dans le budget'}
+                </span>
+              }
+            />
+          </KvList>
+
+          <div className="border-line-light mt-2 border-t pt-3">
+            <MonoLabel>Avenants</MonoLabel>
             {hub.amendments.length === 0 && (
-              <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8 }}>
-                Aucun avenant.
-              </div>
+              <EmptyState className="px-0 py-2">Aucun avenant.</EmptyState>
             )}
             {hub.amendments.map((am) => (
-              <div
-                key={am.id}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: 12,
-                  fontSize: 13,
-                  marginTop: 8,
-                }}
-              >
+              <div key={am.id} className="mt-2 flex items-center justify-between gap-3 text-[13px]">
                 <span>
                   {am.ref} · {am.reason} (+{am.days} j · {xaf(am.amount)})
                 </span>
                 {am.status === 'approved' ? (
-                  <span style={{ ...mono, color: 'var(--ink)' }}>Approuvé</span>
+                  <MonoLabel tone="default">Approuvé</MonoLabel>
                 ) : canMargin(role) ? (
                   <form action={approveAmendment}>
                     <input type="hidden" name="id" value={am.id} />
-                    <button
-                      type="submit"
-                      style={{
-                        background: 'var(--cyan-teal)',
-                        color: '#000',
-                        border: 'none',
-                        padding: '6px 12px',
-                        fontSize: 12,
-                        fontWeight: 500,
-                      }}
-                    >
+                    <Button type="submit" variant="primary" className="px-3 py-1.5">
                       Approuver
-                    </button>
+                    </Button>
                   </form>
                 ) : (
-                  <span style={{ ...mono, color: 'var(--muted)' }}>En attente</span>
+                  <MonoLabel>En attente</MonoLabel>
                 )}
               </div>
             ))}
             {canEditBudget(role) && (
-              <form
-                action={createAmendment}
-                style={{
-                  marginTop: 14,
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: 8,
-                  alignItems: 'center',
-                }}
-              >
-                <input type="hidden" name="projectId" value={id} />
-                <select
-                  name="target"
-                  style={{
-                    border: '1px solid var(--line-light)',
-                    padding: '8px 10px',
-                    fontSize: 13,
-                  }}
-                >
-                  <option value="mo">Main d&apos;œuvre</option>
-                  <option value="achats">Achats</option>
-                  <option value="mission">Frais de mission</option>
-                </select>
-                <input
-                  name="poste"
-                  placeholder="Poste"
-                  style={{
-                    border: '1px solid var(--line-light)',
-                    padding: '8px 10px',
-                    fontSize: 13,
-                  }}
-                />
-                <input
-                  name="days"
-                  type="number"
-                  min={0}
-                  placeholder="Jours"
-                  style={{
-                    border: '1px solid var(--line-light)',
-                    padding: '8px 10px',
-                    fontSize: 13,
-                    width: 90,
-                  }}
-                />
-                <input
-                  name="amount"
-                  type="number"
-                  min={0}
-                  placeholder="Montant XAF"
-                  style={{
-                    border: '1px solid var(--line-light)',
-                    padding: '8px 10px',
-                    fontSize: 13,
-                    width: 140,
-                  }}
-                />
-                <input
-                  name="reason"
-                  placeholder="Motif"
-                  style={{
-                    border: '1px solid var(--line-light)',
-                    padding: '8px 10px',
-                    fontSize: 13,
-                    flex: '1 1 160px',
-                  }}
-                />
-                <button
-                  type="submit"
-                  style={{
-                    background: 'var(--white)',
-                    color: 'var(--ink)',
-                    border: '1px solid var(--line-light)',
-                    padding: '8px 14px',
-                    fontSize: 13,
-                  }}
-                >
-                  Créer l&apos;avenant
-                </button>
+              <form action={createAmendment}>
+                <FormRow className="mt-3.5 items-center gap-2 border-0 bg-transparent p-0">
+                  <input type="hidden" name="projectId" value={id} />
+                  <Select name="target">
+                    <option value="mo">Main d&apos;œuvre</option>
+                    <option value="achats">Achats</option>
+                    <option value="mission">Frais de mission</option>
+                  </Select>
+                  <Input name="poste" placeholder="Poste" />
+                  <Input name="days" type="number" min={0} placeholder="Jours" width={90} />
+                  <Input
+                    name="amount"
+                    type="number"
+                    min={0}
+                    placeholder="Montant XAF"
+                    width={140}
+                  />
+                  <Input name="reason" placeholder="Motif" className="min-w-0 flex-[1_1_160px]" />
+                  <Button type="submit" className="px-3.5 py-2 text-[13px]">
+                    Créer l&apos;avenant
+                  </Button>
+                </FormRow>
               </form>
             )}
           </div>
-        </div>
+        </Card>
       )}
-    </div>
+    </PageSection>
   );
 }

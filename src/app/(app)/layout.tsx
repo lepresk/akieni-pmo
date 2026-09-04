@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 
-import '@/components/shell/shell.css';
 import { Sidebar } from '@/components/shell/sidebar';
 import { Topbar } from '@/components/shell/topbar';
 import { getNavBadges } from '@/lib/nav-badges-server';
@@ -11,18 +10,11 @@ export default async function AppLayout({ children }: { readonly children: React
   const badges = await getNavBadges();
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        minHeight: '100vh',
-        background: 'var(--paper)',
-        color: 'var(--ink)',
-      }}
-    >
+    <div className="bg-paper text-ink flex min-h-screen">
       <Sidebar badges={badges} />
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      <div className="flex min-w-0 flex-1 flex-col">
         <Topbar role={role} user={user} />
-        <main style={{ flex: 1, width: '100%', padding: '24px 28px 64px' }}>{children}</main>
+        <main className="w-full flex-1 px-7 pt-6 pb-16">{children}</main>
       </div>
     </div>
   );

@@ -1,14 +1,8 @@
 import type { ReactElement } from 'react';
 
 import { NotifRules } from '@/components/notifications/notif-rules';
-
-const mono = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 10,
-  letterSpacing: '0.14em',
-  textTransform: 'uppercase' as const,
-  color: 'var(--muted)',
-};
+import { Badge, Card, MonoLabel, SplitLayout } from '@/components/ui';
+import { cn } from '@/lib/cn';
 
 interface Notif {
   readonly title: string;
@@ -64,55 +58,38 @@ const FEED: readonly Notif[] = [
 
 export default function NotificationsPage(): ReactElement {
   return (
-    <div
-      style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 20, alignItems: 'start' }}
-    >
-      <div style={{ border: '1px solid var(--line-light)', background: 'var(--white)' }}>
-        <div style={{ padding: '16px 22px', borderBottom: '1px solid var(--line-light)', ...mono }}>
-          Fil d'activité
-        </div>
-        {FEED.map((notif) => (
-          <div
-            key={notif.title}
-            style={{
-              padding: '16px 22px',
-              borderBottom: '1px solid var(--line-light)',
-              display: 'flex',
-              gap: 12,
-              background: notif.unread ? 'rgba(18,235,214,.06)' : 'var(--white)',
-            }}
-          >
-            <span
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: 999,
-                background: notif.dot,
-                marginTop: 6,
-                flex: '0 0 7px',
-              }}
-            />
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 14, fontWeight: 500 }}>{notif.title}</span>
-                <span
-                  style={{ ...mono, border: '1px solid var(--line-light)', padding: '2px 6px' }}
-                >
-                  {notif.channel}
-                </span>
-                <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--muted)' }}>
-                  {notif.time}
-                </span>
-              </div>
-              <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4, lineHeight: 1.5 }}>
-                {notif.body}
+    <SplitLayout
+      ratio="1.5/1"
+      primary={
+        <Card padding="none">
+          <div className="border-line-light border-b px-[22px] py-4">
+            <MonoLabel>Fil d&apos;activité</MonoLabel>
+          </div>
+          {FEED.map((notif) => (
+            <div
+              key={notif.title}
+              className={cn(
+                'border-line-light flex gap-3 border-b px-[22px] py-4',
+                notif.unread ? 'bg-[rgba(18,235,214,0.06)]' : 'bg-white',
+              )}
+            >
+              <span
+                className="rounded-pill mt-1.5 size-1.5 shrink-0"
+                style={{ background: notif.dot }}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <span className="text-[14px] font-medium">{notif.title}</span>
+                  <Badge>{notif.channel}</Badge>
+                  <span className="text-muted ml-auto text-[12px]">{notif.time}</span>
+                </div>
+                <div className="text-muted mt-1 text-[13px] leading-relaxed">{notif.body}</div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
-
-      <NotifRules />
-    </div>
+          ))}
+        </Card>
+      }
+      secondary={<NotifRules />}
+    />
   );
 }

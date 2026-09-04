@@ -1,8 +1,19 @@
-import type { Route } from 'next';
-import Link from 'next/link';
 import type { ReactElement } from 'react';
 
-import { Icon } from '@/components/icons';
+import {
+  Badge,
+  Button,
+  Card,
+  DataTable,
+  DataTableCell,
+  DataTableRow,
+  MonoLabel,
+  RestrictedPanel,
+  Stack,
+  Surface,
+  Tabs,
+  Text,
+} from '@/components/ui';
 import { RESTRICTED, dateSlash, dayMonthFr, seniorityLabel, xaf } from '@/lib/display';
 import { canRef, canSalary } from '@/lib/rbac';
 import {
@@ -14,52 +25,15 @@ import { getSession } from '@/lib/session';
 
 type Tab = 'postes' | 'rates' | 'calendrier';
 
-const TABS: readonly { readonly key: Tab; readonly label: string }[] = [
-  { key: 'postes', label: 'Postes de coût' },
-  { key: 'rates', label: 'Grille de TJM' },
-  { key: 'calendrier', label: 'Calendrier' },
+const TABS: readonly { readonly key: Tab; readonly label: string; readonly href: string }[] = [
+  { key: 'postes', label: 'Postes de coût', href: '/referentiels?tab=postes' },
+  { key: 'rates', label: 'Grille de TJM', href: '/referentiels?tab=rates' },
+  { key: 'calendrier', label: 'Calendrier', href: '/referentiels?tab=calendrier' },
 ];
 
-const monoHeader = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 10,
-  letterSpacing: '0.14em',
-  textTransform: 'uppercase' as const,
-  color: 'var(--muted)',
-};
-
-function RestrictedNotice({
-  title,
-  body,
-}: {
-  readonly title: string;
-  readonly body: string;
-}): ReactElement {
-  return (
-    <div
-      style={{
-        border: '1px solid var(--line-light)',
-        background: 'var(--white)',
-        padding: 64,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 14,
-        textAlign: 'center',
-        maxWidth: 640,
-        margin: '40px auto',
-      }}
-    >
-      <span style={{ color: 'var(--cyan-teal)', display: 'flex' }}>
-        <Icon name="lock" size={40} />
-      </span>
-      <span style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em' }}>{title}</span>
-      <span style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.6, maxWidth: 440 }}>
-        {body}
-      </span>
-    </div>
-  );
-}
+const POSTES_COLUMNS = '2fr 1fr 1fr 1fr';
+const RATES_COLUMNS = '1.2fr 1fr 1fr 1fr 1fr';
+const HOLIDAYS_COLUMNS = '120px 1fr';
 
 export default async function ReferentielsPage({
   searchParams,
@@ -70,7 +44,7 @@ export default async function ReferentielsPage({
 
   if (!canRef(role)) {
     return (
-      <RestrictedNotice
+      <RestrictedPanel
         title="Administration réservée"
         body="Les référentiels - postes de coût, grille de TJM, calendrier - sont administrés par l'Admin, le PMO, la Finance et la Direction."
       />
@@ -88,207 +62,116 @@ export default async function ReferentielsPage({
   ]);
 
   return (
-    <div style={{ border: '1px solid var(--line-light)', background: 'var(--white)' }}>
-      <div
-        style={{ display: 'flex', borderBottom: '1px solid var(--line-light)', flexWrap: 'wrap' }}
-      >
-        {TABS.map((t) => (
-          <Link
-            key={t.key}
-            href={`/referentiels?tab=${t.key}` as Route}
-            className="ak-tab"
-            data-active={t.key === tab}
-          >
-            {t.label}
-          </Link>
-        ))}
-      </div>
+    <Card padding="none">
+      <Tabs items={TABS} activeKey={tab} />
 
       {tab === 'postes' && (
-        <div>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '2fr 1fr 1fr 1fr',
-              columnGap: 16,
-              padding: '12px 22px',
-              borderBottom: '1px solid var(--line-light)',
-              background: 'var(--paper)',
-              ...monoHeader,
-            }}
-          >
-            <span>Poste de coût</span>
-            <span>Nature</span>
-            <span>Utilisation</span>
-            <span style={{ textAlign: 'right' }}>Action</span>
-          </div>
+        <DataTable
+          className="border-0"
+          columns={POSTES_COLUMNS}
+          minWidth={0}
+          header={
+            <>
+              <MonoLabel>Poste de coût</MonoLabel>
+              <MonoLabel>Nature</MonoLabel>
+              <MonoLabel>Utilisation</MonoLabel>
+              <MonoLabel className="text-right">Action</MonoLabel>
+            </>
+          }
+        >
           {postes.map((c) => (
-            <div
-              key={c.label}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '2fr 1fr 1fr 1fr',
-                columnGap: 16,
-                padding: '13px 22px',
-                borderBottom: '1px solid var(--line-light)',
-                alignItems: 'center',
-              }}
-            >
-              <span style={{ fontSize: 13 }}>{c.label}</span>
-              <span style={{ fontSize: 12, color: c.billable ? 'var(--ink)' : 'var(--muted)' }}>
+            <DataTableRow key={c.label} columns={POSTES_COLUMNS}>
+              <DataTableCell>{c.label}</DataTableCell>
+              <DataTableCell tone={c.billable ? 'default' : 'muted'} className="text-[12px]">
                 {c.billable ? 'Facturable' : 'Non facturable'}
-              </span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--muted)' }}>
+              </DataTableCell>
+              <DataTableCell tone="muted" className="font-mono text-[12px]">
                 {c.usage} projet{c.usage > 1 ? 's' : ''}
-              </span>
-              <span style={{ textAlign: 'right' }}>
-                <button
-                  type="button"
-                  title="À venir"
-                  style={{
-                    border: '1px solid var(--line-light)',
-                    background: 'var(--white)',
-                    padding: '6px 11px',
-                    fontSize: 12,
-                  }}
-                >
+              </DataTableCell>
+              <DataTableCell align="end">
+                <Button title="À venir" className="px-[11px] py-1.5">
                   Désactiver
-                </button>
-              </span>
-            </div>
+                </Button>
+              </DataTableCell>
+            </DataTableRow>
           ))}
-        </div>
+        </DataTable>
       )}
 
       {tab === 'rates' && (
-        <div>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1.2fr 1fr 1fr 1fr 1fr',
-              columnGap: 16,
-              padding: '12px 22px',
-              borderBottom: '1px solid var(--line-light)',
-              background: 'var(--paper)',
-              ...monoHeader,
-            }}
-          >
-            <span>Séniorité</span>
-            <span>Coût chargé / j</span>
-            <span>Prix de vente / j</span>
-            <span>En vigueur depuis</span>
-            <span style={{ textAlign: 'right' }}>État</span>
-          </div>
+        <DataTable
+          className="border-0"
+          columns={RATES_COLUMNS}
+          minWidth={0}
+          header={
+            <>
+              <MonoLabel>Séniorité</MonoLabel>
+              <MonoLabel>Coût chargé / j</MonoLabel>
+              <MonoLabel>Prix de vente / j</MonoLabel>
+              <MonoLabel>En vigueur depuis</MonoLabel>
+              <MonoLabel className="text-right">État</MonoLabel>
+            </>
+          }
+        >
           {rates.map((r, index) => (
-            <div
+            <DataTableRow
               key={`${r.seniority}-${r.effectiveFrom}-${index}`}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1.2fr 1fr 1fr 1fr 1fr',
-                columnGap: 16,
-                padding: '13px 22px',
-                borderBottom: '1px solid var(--line-light)',
-                alignItems: 'center',
-              }}
+              columns={RATES_COLUMNS}
             >
-              <span style={{ fontSize: 13, fontWeight: 500 }}>{seniorityLabel(r.seniority)}</span>
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 12,
-                  color: showCost ? 'var(--ink)' : 'var(--muted)',
-                }}
+              <DataTableCell className="font-medium">{seniorityLabel(r.seniority)}</DataTableCell>
+              <DataTableCell
+                tone={showCost ? 'default' : 'muted'}
+                className="font-mono text-[12px]"
               >
                 {showCost ? xaf(r.costPerDay) : RESTRICTED}
-              </span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
-                {xaf(r.sellPerDay)}
-              </span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--muted)' }}>
+              </DataTableCell>
+              <DataTableCell className="font-mono text-[12px]">{xaf(r.sellPerDay)}</DataTableCell>
+              <DataTableCell tone="muted" className="font-mono text-[12px]">
                 {dateSlash(r.effectiveFrom)}
-              </span>
-              <span style={{ textAlign: 'right' }}>
-                <span
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 10,
-                    letterSpacing: '0.14em',
-                    textTransform: 'uppercase',
-                    padding: '3px 8px',
-                    border: '1px solid var(--line-light)',
-                    color: r.isCurrent ? 'var(--ink)' : 'var(--muted)',
-                    background: r.isCurrent ? 'rgba(56,240,115,.12)' : 'transparent',
-                  }}
-                >
+              </DataTableCell>
+              <DataTableCell align="end">
+                <Badge tone={r.isCurrent ? 'success' : 'muted'} filled={r.isCurrent}>
                   {r.isCurrent ? 'En vigueur' : 'Historique'}
-                </span>
-              </span>
-            </div>
+                </Badge>
+              </DataTableCell>
+            </DataTableRow>
           ))}
-          <div
-            style={{
-              padding: '14px 22px',
-              background: 'var(--paper)',
-              fontSize: 12,
-              color: 'var(--muted)',
-              lineHeight: 1.6,
-            }}
+          <Surface
+            variant="paper"
+            className="text-muted px-[22px] py-3.5 text-[12px] leading-relaxed"
           >
             Un taux est daté : les changements ne réécrivent jamais les périodes déjà facturées.
-          </div>
-        </div>
+          </Surface>
+        </DataTable>
       )}
 
       {tab === 'calendrier' && (
-        <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <p
-            style={{
-              margin: 0,
-              fontSize: 13,
-              color: 'var(--muted)',
-              lineHeight: 1.6,
-              maxWidth: 620,
-            }}
-          >
+        <Stack gap={16} className="px-[22px] py-5">
+          <Text as="p" tone="muted" className="m-0 max-w-[620px] text-[13px] leading-relaxed">
             Capacité de référence 8 h/j. Les jours fériés et les congés validés sortent du calcul de
             chargeabilité.
-          </p>
-          <div style={{ border: '1px solid var(--line-light)' }}>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '120px 1fr',
-                columnGap: 16,
-                padding: '11px 16px',
-                background: 'var(--paper)',
-                borderBottom: '1px solid var(--line-light)',
-                ...monoHeader,
-              }}
-            >
-              <span>Date</span>
-              <span>Jour férié · République du Congo</span>
-            </div>
+          </Text>
+          <DataTable
+            columns={HOLIDAYS_COLUMNS}
+            minWidth={0}
+            header={
+              <>
+                <MonoLabel>Date</MonoLabel>
+                <MonoLabel>Jour férié · République du Congo</MonoLabel>
+              </>
+            }
+          >
             {holidays.map((h) => (
-              <div
-                key={h.observedOn}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '120px 1fr',
-                  columnGap: 16,
-                  padding: '11px 16px',
-                  borderBottom: '1px solid var(--line-light)',
-                  alignItems: 'center',
-                }}
-              >
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+              <DataTableRow key={h.observedOn} columns={HOLIDAYS_COLUMNS}>
+                <DataTableCell className="font-mono text-[12px]">
                   {dayMonthFr(h.observedOn)}
-                </span>
-                <span style={{ fontSize: 13 }}>{h.label}</span>
-              </div>
+                </DataTableCell>
+                <DataTableCell>{h.label}</DataTableCell>
+              </DataTableRow>
             ))}
-          </div>
-        </div>
+          </DataTable>
+        </Stack>
       )}
-    </div>
+    </Card>
   );
 }

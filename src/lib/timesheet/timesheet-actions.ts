@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 
 import { db } from '@/lib/db';
 import { employees, expenses, submissions } from '@/lib/db/schema';
+import { getWeekSnapshot, submissionWeekLabel } from '@/lib/calendar/week-display';
 import { getSession } from '@/lib/session';
 
 interface PostedLine {
@@ -66,7 +67,7 @@ export async function submitTimesheet(formData: FormData): Promise<void> {
     personName: user.name,
     department: user.department,
     managerName,
-    weekLabel: 'S31 · en cours',
+    weekLabel: String(formData.get('weekLabel') || submissionWeekLabel(getWeekSnapshot())),
     hours,
     billable,
     status: 'pending',

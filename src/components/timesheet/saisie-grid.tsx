@@ -1,21 +1,24 @@
 'use client';
 
-import { useState, type CSSProperties, type KeyboardEvent, type ReactElement } from 'react';
+import { useMemo, useState, type KeyboardEvent, type ReactElement } from 'react';
 
 import { Icon } from '@/components/icons';
+import { Button, Card, FormRow, Input, MonoLabel, Select } from '@/components/ui';
+import {
+  getWeekSnapshot,
+  shiftWeekSnapshot,
+  submissionWeekLabel,
+  type WeekSnapshot,
+} from '@/lib/calendar/week-display';
+import { cn } from '@/lib/cn';
+import { dayMonthFr } from '@/lib/display';
 import type { ProjectOption } from '@/lib/timesheet/timesheet-server';
 import { declareMissionExpense, submitTimesheet } from '@/lib/timesheet/timesheet-actions';
 
-const DAYS: readonly { readonly k: string; readonly d: string }[] = [
-  { k: 'LUN', d: '27' },
-  { k: 'MAR', d: '28' },
-  { k: 'MER', d: '29' },
-  { k: 'JEU', d: '30' },
-  { k: 'VEN', d: '31' },
-  { k: 'SAM', d: '01' },
-  { k: 'DIM', d: '02' },
-];
 const CAP = 8;
+
+/** Shared grid template for the header, entry rows and totals row. */
+const GRID_COLS = 'grid-cols-[320px_repeat(7,1fr)_70px]';
 
 interface Row {
   project: string;
@@ -26,12 +29,13 @@ interface Row {
   remaining: number;
 }
 
+/** Starter lines with zero hours: the week is current, not a frozen demo July. */
 const DEFAULT_ROWS: readonly Row[] = [
   {
     project: 'SFEC · Facturation électronique',
     poste: 'Développement',
     activite: 'Développement des API métier',
-    hours: [7, 6.5, 4, 0, 0, 0, 0],
+    hours: [0, 0, 0, 0, 0, 0, 0],
     budget: 17,
     remaining: 9,
   },
@@ -39,7 +43,7 @@ const DEFAULT_ROWS: readonly Row[] = [
     project: 'SFEC · Facturation électronique',
     poste: 'Recette / QA',
     activite: 'Tests de charge',
-    hours: [1, 1.5, 2, 0, 0, 0, 0],
+    hours: [0, 0, 0, 0, 0, 0, 0],
     budget: 37,
     remaining: 15,
   },
@@ -47,7 +51,7 @@ const DEFAULT_ROWS: readonly Row[] = [
     project: 'CAMU · Couverture santé',
     poste: 'Analyse fonctionnelle',
     activite: 'Ateliers de cadrage',
-    hours: [0, 0, 2, 0, 0, 0, 0],
+    hours: [0, 0, 0, 0, 0, 0, 0],
     budget: 16,
     remaining: 10,
   },
@@ -55,44 +59,27 @@ const DEFAULT_ROWS: readonly Row[] = [
     project: 'Interne · Académie & avant-vente',
     poste: 'Formation interne',
     activite: 'Académie interne',
-    hours: [0, 0, 0.5, 0, 0, 0, 0],
+    hours: [0, 0, 0, 0, 0, 0, 0],
     budget: 43,
     remaining: 12,
   },
 ];
 
-const mono: CSSProperties = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 10,
-  letterSpacing: '0.14em',
-  textTransform: 'uppercase',
-  color: 'var(--muted)',
-};
-const btn: CSSProperties = {
-  border: '1px solid var(--line-light)',
-  background: 'var(--white)',
-  padding: '8px 12px',
-  fontSize: 12,
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-};
-const input: CSSProperties = {
-  border: '1px solid var(--line-light)',
-  padding: '8px 10px',
-  fontSize: 13,
-};
-
 const isBillable = (project: string): boolean => !project.startsWith('Interne');
 
 export function SaisieGrid({
   options,
+  initialWeek,
 }: {
   readonly options: readonly ProjectOption[];
+  readonly initialWeek: WeekSnapshot;
 }): ReactElement {
+  const [week, setWeek] = useState<WeekSnapshot>(initialWeek);
+  const days = week.days;
   const [rows, setRows] = useState<Row[]>(DEFAULT_ROWS.map((r) => ({ ...r, hours: [...r.hours] })));
-  const [selDay, setSelDay] = useState(2);
+  const [selDay, setSelDay] = useState(() =>
+    initialWeek.todayIndex >= 0 ? initialWeek.todayIndex : 0,
+  );
   const [mobile, setMobile] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
 
@@ -108,6 +95,19 @@ export function SaisieGrid({
 
   const [fraisOpen, setFraisOpen] = useState(false);
 
+  const expenseDateHint = useMemo(() => {
+    const today = getWeekSnapshot();
+    const idx = today.todayIndex >= 0 ? today.todayIndex : 0;
+    const iso = today.days[idx]?.iso;
+    return iso ? dayMonthFr(iso) : 'Date';
+  }, []);
+
+  const goWeek = (delta: number): void => {
+    const next = shiftWeekSnapshot(week.mondayIso, delta);
+    setWeek(next);
+    setSelDay(next.todayIndex >= 0 ? next.todayIndex : 0);
+  };
+
   const postesOf = (project: string): readonly { label: string; activities: readonly string[] }[] =>
     options.find((o) => o.project === project)?.postes ?? [];
   const activitiesOf = (project: string, poste: string): readonly string[] =>
@@ -119,6 +119,7 @@ export function SaisieGrid({
   const billableH = rows.filter((r) => isBillable(r.project)).reduce((s, r) => s + rowTotal(r), 0);
   const nonBillableH = weekTotal - billableH;
   const payload = rows.map((r) => ({ project: r.project, poste: r.poste, hours: rowTotal(r) }));
+  const weekLabel = submissionWeekLabel(week);
 
   const setCell = (ri: number, di: number, value: number): void => {
     setRows((cur) =>
@@ -187,196 +188,130 @@ export function SaisieGrid({
       }
     };
 
-  const template = `320px repeat(7, 1fr) 70px`;
-
   if (mobile) {
     const day = selDay;
     const dayTot = dayTotal(day);
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'flex-start' }}>
-        <button type="button" onClick={() => setMobile(false)} style={btn}>
-          Vue bureau
-        </button>
-        <div
-          style={{
-            width: 360,
-            border: '1px solid var(--line-light)',
-            background: 'var(--white)',
-            overflow: 'hidden',
-          }}
-        >
-          <div
-            style={{
-              background: 'var(--black)',
-              color: 'var(--white)',
-              padding: '10px 16px',
-              fontFamily: 'var(--font-mono)',
-              fontSize: 11,
-            }}
-          >
-            09:41 · Akieni PMO
+      <div className="flex flex-col items-start gap-4">
+        <Button onClick={() => setMobile(false)}>Vue bureau</Button>
+        <Card padding="none" className="w-[360px] overflow-hidden">
+          <div className="bg-black px-4 py-2.5 font-mono text-[11px] text-white">
+            {week.shortLabel} · Akieni PMO
           </div>
-          <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div
-              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}
-            >
-              <span style={{ fontSize: 18, fontWeight: 600 }}>Ma journée</span>
+          <div className="flex flex-col gap-3 p-4">
+            <div className="flex items-baseline justify-between">
+              <span className="text-[18px] font-semibold">Ma journée</span>
               <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 14,
-                  color: dayTot > CAP ? '#b3261e' : 'var(--ink)',
-                }}
+                className={cn('font-mono text-[14px]', dayTot > CAP ? 'text-danger' : 'text-ink')}
               >
                 {dayTot} / {CAP} h
               </span>
             </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {DAYS.map((d, i) => (
+            <div className="flex gap-1.5">
+              {days.map((d, i) => (
                 <button
-                  key={d.k}
+                  key={d.iso}
                   type="button"
                   onClick={() => setSelDay(i)}
-                  style={{
-                    flex: 1,
-                    padding: '6px 0',
-                    fontSize: 11,
-                    border: '1px solid var(--line-light)',
-                    background: i === day ? 'var(--black)' : 'var(--white)',
-                    color: i === day ? 'var(--white)' : 'var(--ink)',
-                  }}
+                  className={cn(
+                    'border-line-light flex-1 border py-1.5 text-[11px]',
+                    i === day ? 'bg-black text-white' : 'text-ink bg-white',
+                  )}
                 >
-                  {d.k}
+                  {d.key}
                 </button>
               ))}
             </div>
             {rows.map((row, ri) => (
-              <div
-                key={ri}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  borderTop: '1px solid var(--line-light)',
-                  paddingTop: 10,
-                }}
-              >
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13 }}>{row.project.split(' · ')[0]}</div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>{row.poste}</div>
+              <div key={ri} className="border-line-light flex items-center gap-2.5 border-t pt-2.5">
+                <div className="flex-1">
+                  <div className="text-[13px]">{row.project.split(' · ')[0]}</div>
+                  <div className="text-muted text-[11px]">{row.poste}</div>
                 </div>
-                <button
-                  type="button"
+                <Button
                   onClick={() => setCell(ri, day, Math.max(0, (row.hours[day] ?? 0) - 0.5))}
-                  style={{ ...btn, width: 44, height: 44, justifyContent: 'center' }}
+                  className="h-11 w-11 p-0"
                 >
                   −
-                </button>
-                <span style={{ fontFamily: 'var(--font-mono)', width: 34, textAlign: 'center' }}>
-                  {row.hours[day] ?? 0}
-                </span>
-                <button
-                  type="button"
+                </Button>
+                <span className="w-[34px] text-center font-mono">{row.hours[day] ?? 0}</span>
+                <Button
                   onClick={() => setCell(ri, day, (row.hours[day] ?? 0) + 0.5)}
-                  style={{ ...btn, width: 44, height: 44, justifyContent: 'center' }}
+                  className="h-11 w-11 p-0"
                 >
                   +
-                </button>
+                </Button>
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 12,
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div
-            style={{
-              display: 'flex',
-              border: '1px solid var(--line-light)',
-              background: 'var(--white)',
-              alignItems: 'center',
-            }}
-          >
-            <span
-              style={{ ...btn, borderTop: 'none', borderBottom: 'none', borderLeft: 'none' }}
-              title="Semaine précédente (lecture seule)"
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3.5">
+          <div className="border-line-light flex items-center border bg-white">
+            <button
+              type="button"
+              onClick={() => goWeek(-1)}
+              className="border-line-light flex cursor-pointer items-center gap-2 border-r px-3 py-2 text-[12px]"
+              title="Semaine précédente"
             >
               ‹
-            </span>
-            <span style={{ padding: '8px 14px', fontSize: 13 }}>27 juil. → 2 août 2026 · S31</span>
-            <span
-              style={{ ...btn, borderTop: 'none', borderBottom: 'none', borderRight: 'none' }}
-              title="Semaine suivante (non ouverte)"
+            </button>
+            <span className="px-3.5 py-2 text-[13px]">{week.rangeLabel}</span>
+            <button
+              type="button"
+              onClick={() => goWeek(1)}
+              className="border-line-light flex cursor-pointer items-center gap-2 border-l px-3 py-2 text-[12px]"
+              title="Semaine suivante"
             >
               ›
-            </span>
+            </button>
           </div>
-          <span style={{ ...mono }}>Capacité {CAP} h/j · 5 j</span>
+          <MonoLabel>Capacité {CAP} h/j · 5 j</MonoLabel>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button type="button" onClick={() => setBulkOpen((v) => !v)} style={btn}>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => setBulkOpen((v) => !v)}>
             <Icon name="layers" size={14} /> Mode bulk
-          </button>
-          <button type="button" onClick={dupDay} style={btn}>
-            <Icon name="copy" size={14} /> Dupliquer {DAYS[selDay]?.k.toLowerCase()} sur la semaine
-          </button>
-          <button type="button" onClick={dupWeek} style={btn}>
-            <Icon name="calendar" size={14} /> Semaine précédente
-          </button>
-          <button type="button" onClick={() => setMobile(true)} style={btn}>
+          </Button>
+          <Button onClick={dupDay}>
+            <Icon name="copy" size={14} /> Dupliquer {days[selDay]?.key.toLowerCase()} sur la
+            semaine
+          </Button>
+          <Button onClick={dupWeek}>
+            <Icon name="calendar" size={14} /> Remplir semaine type
+          </Button>
+          <Button onClick={() => setMobile(true)}>
             <Icon name="phone" size={14} /> Vue mobile
-          </button>
+          </Button>
           <form action={submitTimesheet}>
             <input type="hidden" name="rows" value={JSON.stringify(payload)} />
-            <button
+            <input type="hidden" name="weekLabel" value={weekLabel} />
+            <input type="hidden" name="mondayIso" value={week.mondayIso} />
+            <Button
               type="submit"
+              variant="primary"
               disabled={weekTotal <= 0}
-              style={{
-                background: weekTotal > 0 ? 'var(--cyan-teal)' : '#e7e7e4',
-                color: '#000',
-                border: 'none',
-                padding: '9px 16px',
-                fontSize: 13,
-                fontWeight: 500,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-              }}
+              className={cn(
+                'border-none px-4 py-[9px] text-[13px] disabled:opacity-100',
+                weekTotal > 0 ? 'bg-cyan' : 'bg-line-light',
+              )}
             >
               <Icon name="send" size={14} /> Soumettre la semaine
-            </button>
+            </Button>
           </form>
         </div>
       </div>
 
       {bulkOpen && (
-        <div
-          style={{
-            border: '1px solid var(--line-light)',
-            background: 'var(--white)',
-            padding: '18px 22px',
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 20,
-            alignItems: 'flex-end',
-          }}
-        >
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={mono}>Projet</span>
-            <select
+        <FormRow className="gap-[20px] px-[22px] py-[18px]">
+          <label className="flex flex-col gap-1.5">
+            <MonoLabel>Projet</MonoLabel>
+            <Select
               value={bProject}
               onChange={(e) => {
                 const p = postesOf(e.target.value)[0];
@@ -384,273 +319,173 @@ export function SaisieGrid({
                 setBPoste(p?.label ?? '');
                 setBActivite(p?.activities[0] ?? '');
               }}
-              style={{ ...input, minWidth: 240 }}
+              className="min-w-[240px]"
             >
               {options.map((o) => (
                 <option key={o.project}>{o.project}</option>
               ))}
-            </select>
+            </Select>
           </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={mono}>Poste de coût</span>
-            <select
+          <label className="flex flex-col gap-1.5">
+            <MonoLabel>Poste de coût</MonoLabel>
+            <Select
               value={bPoste}
               onChange={(e) => {
                 setBPoste(e.target.value);
                 setBActivite(activitiesOf(bProject, e.target.value)[0] ?? '');
               }}
-              style={{ ...input, minWidth: 180 }}
+              className="min-w-[180px]"
             >
               {postesOf(bProject).map((p) => (
                 <option key={p.label}>{p.label}</option>
               ))}
-            </select>
+            </Select>
           </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={mono}>Activité</span>
-            <select
+          <label className="flex flex-col gap-1.5">
+            <MonoLabel>Activité</MonoLabel>
+            <Select
               value={bActivite}
               onChange={(e) => setBActivite(e.target.value)}
-              style={{ ...input, minWidth: 200 }}
+              className="min-w-[200px]"
             >
               {activitiesOf(bProject, bPoste).map((a) => (
                 <option key={a}>{a}</option>
               ))}
-            </select>
+            </Select>
           </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={mono}>Heures / jour</span>
-            <input
+          <label className="flex flex-col gap-1.5">
+            <MonoLabel>Heures / jour</MonoLabel>
+            <Input
               value={bHours}
               onChange={(e) => setBHours(e.target.value)}
-              style={{ ...input, width: 80 }}
+              className="w-[80px]"
             />
           </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={mono}>Jours</span>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {DAYS.map((d, i) => (
+          <label className="flex flex-col gap-1.5">
+            <MonoLabel>Jours</MonoLabel>
+            <div className="flex gap-1">
+              {days.map((d, i) => (
                 <button
-                  key={d.k}
+                  key={d.iso}
                   type="button"
                   onClick={() => setBDays((cur) => cur.map((v, j) => (j === i ? !v : v)))}
-                  style={{
-                    width: 34,
-                    padding: '8px 0',
-                    fontSize: 11,
-                    border: '1px solid var(--line-light)',
-                    background: bDays[i] ? 'var(--black)' : 'var(--white)',
-                    color: bDays[i] ? 'var(--white)' : 'var(--ink)',
-                    cursor: 'pointer',
-                  }}
+                  className={cn(
+                    'border-line-light w-[34px] border py-2 text-[11px]',
+                    bDays[i] ? 'bg-black text-white' : 'text-ink bg-white',
+                  )}
                 >
-                  {d.k.charAt(0) + d.k.charAt(1).toLowerCase()}
+                  {d.key.charAt(0) + d.key.charAt(1).toLowerCase()}
                 </button>
               ))}
             </div>
           </label>
-          <button
-            type="button"
+          <Button
             onClick={applyBulk}
-            style={{
-              background: 'var(--black)',
-              color: 'var(--white)',
-              border: 'none',
-              padding: '10px 18px',
-              fontSize: 13,
-              fontWeight: 500,
-              cursor: 'pointer',
-            }}
+            className="border-none bg-black px-[18px] py-2.5 text-[13px] font-medium text-white hover:bg-black"
           >
             Appliquer en masse
-          </button>
-        </div>
+          </Button>
+        </FormRow>
       )}
 
-      <div
-        style={{
-          border: '1px solid var(--line-light)',
-          background: 'var(--white)',
-          overflowX: 'auto',
-        }}
-      >
-        <div style={{ minWidth: 900 }}>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: template,
-              borderBottom: '1px solid var(--line-light)',
-              background: 'var(--paper)',
-            }}
-          >
-            <span style={{ ...mono, padding: '12px 16px' }}>Projet · poste · activité</span>
-            {DAYS.map((d, i) => (
+      <div className="border-line-light overflow-x-auto border bg-white">
+        <div className="min-w-[900px]">
+          <div className={cn('border-line-light bg-paper grid border-b', GRID_COLS)}>
+            <MonoLabel className="px-4 py-3">Projet · poste · activité</MonoLabel>
+            {days.map((d, i) => (
               <button
-                key={d.k}
+                key={d.iso}
                 type="button"
                 onClick={() => setSelDay(i)}
-                style={{
-                  padding: '10px 0',
-                  border: 'none',
-                  background: i === selDay ? 'var(--black)' : 'transparent',
-                  color: i === selDay ? 'var(--white)' : i >= 5 ? 'var(--muted)' : 'var(--ink)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  cursor: 'pointer',
-                }}
+                className={cn(
+                  'flex cursor-pointer flex-col items-center border-0 py-2.5',
+                  i === selDay
+                    ? 'bg-black text-white'
+                    : cn('bg-transparent', i >= 5 ? 'text-muted' : 'text-ink'),
+                )}
               >
-                <span
-                  style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em' }}
-                >
-                  {d.k}
-                </span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{d.d}</span>
+                <span className="font-mono text-[10px] tracking-[0.1em]">{d.key}</span>
+                <span className="font-mono text-[12px]">{d.dayOfMonth}</span>
               </button>
             ))}
-            <span style={{ ...mono, padding: '12px 8px', textAlign: 'right' }}>Total</span>
+            <MonoLabel className="px-2 py-3 text-right">Total</MonoLabel>
           </div>
 
           {rows.map((row, ri) => (
             <div
               key={ri}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: template,
-                borderBottom: '1px solid var(--line-light)',
-                alignItems: 'center',
-                borderLeft: `3px solid ${isBillable(row.project) ? 'var(--cyan-teal)' : 'var(--line-light)'}`,
-              }}
+              className={cn(
+                'border-line-light grid items-center border-b border-l-[3px]',
+                GRID_COLS,
+                isBillable(row.project) ? 'border-l-cyan' : 'border-l-line-light',
+              )}
             >
-              <span
-                style={{
-                  padding: '10px 14px',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  justifyContent: 'space-between',
-                  gap: 8,
-                }}
-              >
-                <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                  <span style={{ fontSize: 13 }}>{row.project}</span>
-                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+              <span className="flex items-start justify-between gap-2 px-3.5 py-2.5">
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-[13px]">{row.project}</span>
+                  <span className="text-muted text-[11px]">
                     {row.poste} · {row.activite}
                   </span>
                   <span
-                    style={{
-                      fontSize: 10,
-                      color: row.remaining <= 2 ? '#b3261e' : 'var(--muted)',
-                      fontFamily: 'var(--font-mono)',
-                    }}
+                    className={cn(
+                      'font-mono text-[10px]',
+                      row.remaining <= 2 ? 'text-danger' : 'text-muted',
+                    )}
                   >
                     reste {row.remaining} j / {row.budget} j
                     {row.remaining <= 2 ? ' · quasi épuisé' : ''}
                   </span>
                 </span>
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
                   onClick={() => removeRow(ri)}
                   aria-label="Supprimer la ligne"
-                  style={{
-                    border: 'none',
-                    background: 'none',
-                    color: 'var(--muted)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    padding: 2,
-                    marginTop: 2,
-                    flex: '0 0 auto',
-                  }}
+                  className="mt-0.5 flex-none border-none p-0.5"
                 >
                   <Icon name="trash" size={15} />
-                </button>
+                </Button>
               </span>
-              {DAYS.map((d, di) => (
+              {days.map((d, di) => (
                 <input
-                  key={d.k}
+                  key={d.iso}
                   id={`ts-${ri}-${di}`}
                   inputMode="decimal"
                   value={(row.hours[di] ?? 0) === 0 ? '' : String(row.hours[di])}
                   onChange={(e) => setCell(ri, di, Number(e.target.value.replace(',', '.')) || 0)}
                   onKeyDown={onKey(ri, di)}
-                  style={{
-                    width: '100%',
-                    border: 'none',
-                    borderLeft: '1px solid var(--line-light)',
-                    textAlign: 'center',
-                    padding: '12px 0',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 12,
-                    background: di === selDay ? 'rgba(18,235,214,.06)' : 'transparent',
-                  }}
+                  className={cn(
+                    'border-l-line-light w-full border-l py-3 text-center font-mono text-[12px]',
+                    di === selDay ? 'bg-cyan/[0.06]' : 'bg-transparent',
+                  )}
                 />
               ))}
-              <span
-                style={{
-                  padding: '0 8px',
-                  textAlign: 'right',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 12,
-                }}
-              >
-                {rowTotal(row)}
-              </span>
+              <span className="px-2 text-right font-mono text-[12px]">{rowTotal(row)}</span>
             </div>
           ))}
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: template,
-              background: 'var(--paper)',
-              alignItems: 'center',
-            }}
-          >
-            <span style={{ ...mono, padding: '10px 16px' }}>Total par jour</span>
-            {DAYS.map((d, i) => {
+          <div className={cn('bg-paper grid items-center', GRID_COLS)}>
+            <MonoLabel className="px-4 py-2.5">Total par jour</MonoLabel>
+            {days.map((d, i) => {
               const t = dayTotal(i);
               return (
                 <span
-                  key={d.k}
-                  style={{
-                    textAlign: 'center',
-                    padding: '10px 0',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 12,
-                    color: t > CAP ? '#b3261e' : 'var(--ink)',
-                    background: t > CAP ? 'rgba(179,38,30,.10)' : 'transparent',
-                  }}
+                  key={d.iso}
+                  className={cn(
+                    'py-2.5 text-center font-mono text-[12px]',
+                    t > CAP ? 'bg-danger/10 text-danger' : 'text-ink bg-transparent',
+                  )}
                 >
-                  {t === 0 ? '—' : t}
+                  {t === 0 ? '-' : t}
                 </span>
               );
             })}
-            <span
-              style={{
-                padding: '0 8px',
-                textAlign: 'right',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 13,
-                fontWeight: 600,
-              }}
-            >
-              {weekTotal}
-            </span>
+            <span className="px-2 text-right font-mono text-[13px] font-semibold">{weekTotal}</span>
             <span />
           </div>
 
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 10,
-              alignItems: 'center',
-              padding: '12px 16px',
-              borderTop: '1px solid var(--line-light)',
-            }}
-          >
-            <span style={mono}>Ajouter une ligne</span>
-            <select
+          <div className="border-line-light flex flex-wrap items-center gap-2.5 border-t px-4 py-3">
+            <MonoLabel>Ajouter une ligne</MonoLabel>
+            <Select
               value={addProject}
               onChange={(e) => {
                 setAddProject(e.target.value);
@@ -658,121 +493,89 @@ export function SaisieGrid({
                 setAddPoste(p?.label ?? '');
                 setAddActivite(p?.activities[0] ?? '');
               }}
-              style={input}
             >
               {options.map((o) => (
                 <option key={o.project}>{o.project}</option>
               ))}
-            </select>
-            <select
+            </Select>
+            <Select
               value={addPoste}
               onChange={(e) => {
                 setAddPoste(e.target.value);
                 setAddActivite(activitiesOf(addProject, e.target.value)[0] ?? '');
               }}
-              style={input}
             >
               {postesOf(addProject).map((p) => (
                 <option key={p.label}>{p.label}</option>
               ))}
-            </select>
-            <select
-              value={addActivite}
-              onChange={(e) => setAddActivite(e.target.value)}
-              style={input}
-            >
+            </Select>
+            <Select value={addActivite} onChange={(e) => setAddActivite(e.target.value)}>
               {activitiesOf(addProject, addPoste).map((a) => (
                 <option key={a}>{a}</option>
               ))}
-            </select>
-            <button type="button" onClick={addRow} style={btn}>
-              + Ajouter
-            </button>
+            </Select>
+            <Button onClick={addRow}>+ Ajouter</Button>
           </div>
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 }}>
-        <span style={{ ...mono, textTransform: 'none' }}>
+      <div className="flex flex-wrap justify-between gap-3">
+        <MonoLabel className="normal-case">
           ↵ ligne suivante · ↑↓ naviguer · ⇥ jour suivant · D dupliquer la cellule sur la semaine
-        </span>
-        <span style={{ display: 'flex', gap: 16, fontFamily: 'var(--font-mono)', fontSize: 12 }}>
-          <span style={{ color: 'var(--green)' }}>● Facturable {billableH} h</span>
-          <span style={{ color: 'var(--muted)' }}>● Non facturable {nonBillableH} h</span>
+        </MonoLabel>
+        <span className="flex gap-4 font-mono text-[12px]">
+          <span className="text-green">● Facturable {billableH} h</span>
+          <span className="text-muted">● Non facturable {nonBillableH} h</span>
         </span>
       </div>
 
-      <div style={{ border: '1px solid var(--line-light)', background: 'var(--white)' }}>
-        <div
-          style={{
-            padding: '16px 22px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: 10,
-          }}
-        >
+      <Card padding="none">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 px-[22px] py-4">
           <div>
-            <div style={{ ...mono }}>Mes frais de mission</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+            <MonoLabel>Mes frais de mission</MonoLabel>
+            <div className="text-muted mt-1 text-[12px]">
               Déclarez vos frais avec justificatif : la comptabilité les contrôle puis les
               rembourse.
             </div>
           </div>
-          <button type="button" onClick={() => setFraisOpen((v) => !v)} style={btn}>
-            + Déclarer un frais
-          </button>
+          <Button onClick={() => setFraisOpen((v) => !v)}>+ Déclarer un frais</Button>
         </div>
         {fraisOpen && (
           <form
             action={declareMissionExpense}
-            style={{
-              padding: '0 22px 18px',
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 10,
-              alignItems: 'center',
-            }}
+            className="flex flex-wrap items-center gap-2.5 px-[22px] pb-[18px]"
           >
-            <select name="projectName" style={input}>
+            <Select name="projectName">
               {options.map((o) => (
                 <option key={o.project}>{o.project}</option>
               ))}
-            </select>
-            <input
+            </Select>
+            <Input
               name="label"
               placeholder="Nature (per diem, transport...)"
-              style={{ ...input, flex: '1 1 180px' }}
+              className="flex-[1_1_180px]"
             />
-            <input
+            <Input
               name="amount"
               type="number"
               min={0}
               placeholder="Montant XAF"
-              style={{ ...input, width: 140 }}
+              className="w-[140px]"
             />
-            <input name="date" placeholder="Date (ex. 29 juil.)" style={{ ...input, width: 130 }} />
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                fontSize: 12,
-                color: 'var(--muted)',
-              }}
-            >
+            <Input
+              name="date"
+              placeholder={`Date (ex. ${expenseDateHint})`}
+              className="w-[130px]"
+            />
+            <label className="text-muted flex items-center gap-1.5 text-[12px]">
               <input type="checkbox" name="billable" /> Refacturable
             </label>
-            <button
-              type="submit"
-              style={{ ...btn, background: 'var(--cyan-teal)', border: 'none', fontWeight: 500 }}
-            >
+            <Button type="submit" variant="primary" className="border-none">
               Déclarer
-            </button>
+            </Button>
           </form>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

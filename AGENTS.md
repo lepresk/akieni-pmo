@@ -17,6 +17,7 @@ always-on Cursor rules live in `.cursor/rules/`. Product spec: `docs/product/`.
   and `api/` route handlers. Per route: `page.tsx`, `layout.tsx`, `loading.tsx`,
   `error.tsx`, `not-found.tsx` as needed.
 - `src/components/<feature>/` - feature-grouped components (`kebab-case.tsx`).
+- `src/components/ui/` - reusable design-system primitives (Button, DataTable, MonoLabel, …).
 - `src/hooks/` - `use-*.ts` client hooks.
 - `src/lib/<feature>/` - `*-server.ts` (reads), `*-actions.ts` (mutations), `*-schemas.ts`
   (Zod), `*-display.ts` (pure formatting), `*-permissions.ts` (authorization).

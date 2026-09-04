@@ -1,7 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  output: 'standalone',
+  // Standalone is for production images only. Enabling it for every build pollutes
+  // `.next/` with production artifacts that corrupt a concurrent `next dev`.
+  ...(process.env.NODE_ENV === 'production' ? { output: 'standalone' } : {}),
   // App Router routes are typed; broken internal links fail the build.
   typedRoutes: true,
   experimental: {

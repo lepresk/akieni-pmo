@@ -2,6 +2,8 @@
 
 import { useState, type ReactElement } from 'react';
 
+import { Card, MonoLabel, Toggle } from '@/components/ui';
+
 interface Rule {
   readonly label: string;
   readonly detail: string;
@@ -14,14 +16,6 @@ const RULES: readonly Rule[] = [
   { label: 'Jalon en retard', detail: 'notification au PM du niveau concerné' },
 ];
 
-const mono = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 10,
-  letterSpacing: '0.14em',
-  textTransform: 'uppercase' as const,
-  color: 'var(--muted)',
-};
-
 export function NotifRules(): ReactElement {
   const [enabled, setEnabled] = useState<readonly boolean[]>([true, true, false, true]);
 
@@ -30,57 +24,25 @@ export function NotifRules(): ReactElement {
   };
 
   return (
-    <div style={{ border: '1px solid var(--line-light)', background: 'var(--white)' }}>
-      <div style={{ padding: '16px 22px', borderBottom: '1px solid var(--line-light)', ...mono }}>
-        Règles de rappel
+    <Card padding="none">
+      <div className="border-line-light border-b px-[22px] py-4">
+        <MonoLabel>Règles de rappel</MonoLabel>
       </div>
       {RULES.map((rule, index) => {
         const on = enabled[index] ?? false;
         return (
           <div
             key={rule.label}
-            style={{
-              padding: '14px 22px',
-              borderBottom: '1px solid var(--line-light)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 14,
-            }}
+            className="border-line-light flex items-center gap-3.5 border-b px-[22px] py-3.5 last:border-b-0"
           >
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>{rule.label}</div>
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>{rule.detail}</div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[13px] font-medium">{rule.label}</div>
+              <div className="text-muted text-[12px]">{rule.detail}</div>
             </div>
-            <button
-              type="button"
-              onClick={() => toggle(index)}
-              aria-pressed={on}
-              style={{
-                width: 42,
-                height: 24,
-                borderRadius: 999,
-                border: '1px solid var(--line-light)',
-                background: on ? 'var(--cyan-teal)' : '#e7e7e4',
-                position: 'relative',
-                transition: 'background var(--dur-1) var(--ease)',
-              }}
-            >
-              <span
-                style={{
-                  position: 'absolute',
-                  top: 2,
-                  left: on ? 20 : 2,
-                  width: 18,
-                  height: 18,
-                  borderRadius: 999,
-                  background: on ? '#000' : 'var(--white)',
-                  transition: 'left var(--dur-1) var(--ease)',
-                }}
-              />
-            </button>
+            <Toggle pressed={on} onPressedChange={() => toggle(index)} aria-label={rule.label} />
           </div>
         );
       })}
-    </div>
+    </Card>
   );
 }

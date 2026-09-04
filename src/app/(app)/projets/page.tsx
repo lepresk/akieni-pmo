@@ -1,19 +1,10 @@
-import type { Route } from 'next';
-import Link from 'next/link';
 import type { ReactElement } from 'react';
 
+import { DataTable, DataTableCell, DataTableRow, MonoLabel, ProgressBar } from '@/components/ui';
 import { marginColor, marginFromCostLoad, modelLabel, pct, segmentLabel } from '@/lib/display';
 import { getPortfolio } from '@/lib/projects/projects-server';
 import { canMargin } from '@/lib/rbac';
 import { getSession } from '@/lib/session';
-
-const monoHeader = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 10,
-  letterSpacing: '0.14em',
-  textTransform: 'uppercase' as const,
-  color: 'var(--muted)',
-};
 
 const columns = '1.8fr 1.3fr 0.8fr 1.2fr 1.4fr 0.9fr';
 
@@ -23,105 +14,51 @@ export default async function ProjetsPage(): Promise<ReactElement> {
   const showMargin = canMargin(role);
 
   return (
-    <div
-      style={{
-        border: '1px solid var(--line-light)',
-        background: 'var(--white)',
-        overflowX: 'auto',
-      }}
+    <DataTable
+      columns={columns}
+      minWidth={900}
+      header={
+        <>
+          <MonoLabel>Projet</MonoLabel>
+          <MonoLabel>Client</MonoLabel>
+          <MonoLabel>Segment</MonoLabel>
+          <MonoLabel>Chef de projet</MonoLabel>
+          <MonoLabel>Budget consommé</MonoLabel>
+          <MonoLabel className="text-right">{showMargin ? 'Marge' : 'TJM projet moy.'}</MonoLabel>
+        </>
+      }
     >
-      <div style={{ minWidth: 900 }}>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: columns,
-            columnGap: 16,
-            padding: '12px 22px',
-            borderBottom: '1px solid var(--line-light)',
-            background: 'var(--paper)',
-            ...monoHeader,
-          }}
-        >
-          <span>Projet</span>
-          <span>Client</span>
-          <span>Segment</span>
-          <span>Chef de projet</span>
-          <span>Budget consommé</span>
-          <span style={{ textAlign: 'right' }}>{showMargin ? 'Marge' : 'TJM projet moy.'}</span>
-        </div>
-
-        {rows.map((row) => {
-          const spentPct = row.budgetDays > 0 ? (row.spentDays / row.budgetDays) * 100 : 0;
-          return (
-            <Link
-              key={row.id}
-              href={`/projets/${row.id}` as Route}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: columns,
-                columnGap: 16,
-                padding: '14px 22px',
-                borderBottom: '1px solid var(--line-light)',
-                alignItems: 'center',
-                color: 'inherit',
-              }}
-            >
-              <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 13, fontWeight: 500 }}>{row.name}</span>
-                <span
-                  style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)' }}
-                >
-                  {row.code} · {modelLabel(row.model)}
+      {rows.map((row) => {
+        const spentPct = row.budgetDays > 0 ? (row.spentDays / row.budgetDays) * 100 : 0;
+        return (
+          <DataTableRow key={row.id} columns={columns} href={`/projets/${row.id}`}>
+            <DataTableCell stack>
+              <span className="font-medium">{row.name}</span>
+              <span className="text-muted font-mono text-[11px]">
+                {row.code} · {modelLabel(row.model)}
+              </span>
+            </DataTableCell>
+            <DataTableCell>{row.clientName}</DataTableCell>
+            <DataTableCell tone="muted" className="text-xs">
+              {segmentLabel(row.segment)}
+            </DataTableCell>
+            <DataTableCell>{row.pmName}</DataTableCell>
+            <DataTableCell className="flex items-center gap-2.5">
+              <ProgressBar value={spentPct} className="min-w-[80px] flex-1" />
+              <span className="w-[40px] text-right font-mono text-xs">{pct(spentPct)}</span>
+            </DataTableCell>
+            <DataTableCell align="end" className="font-mono text-xs">
+              {showMargin && row.costLoad !== null ? (
+                <span style={{ color: marginColor(row.costLoad) }}>
+                  {marginFromCostLoad(row.costLoad)} %
                 </span>
-              </span>
-              <span style={{ fontSize: 13 }}>{row.clientName}</span>
-              <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-                {segmentLabel(row.segment)}
-              </span>
-              <span style={{ fontSize: 13 }}>{row.pmName}</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span
-                  style={{
-                    position: 'relative',
-                    flex: 1,
-                    height: 6,
-                    background: '#efefec',
-                    minWidth: 80,
-                  }}
-                >
-                  <span
-                    style={{
-                      position: 'absolute',
-                      inset: '0 auto 0 0',
-                      width: `${Math.min(100, spentPct)}%`,
-                      background: spentPct > 100 ? '#b3261e' : 'var(--black)',
-                    }}
-                  />
-                </span>
-                <span
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 12,
-                    width: 40,
-                    textAlign: 'right',
-                  }}
-                >
-                  {pct(spentPct)}
-                </span>
-              </span>
-              <span style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
-                {showMargin && row.costLoad !== null ? (
-                  <span style={{ color: marginColor(row.costLoad) }}>
-                    {marginFromCostLoad(row.costLoad)} %
-                  </span>
-                ) : (
-                  <span style={{ color: 'var(--muted)' }}>-</span>
-                )}
-              </span>
-            </Link>
-          );
-        })}
-      </div>
-    </div>
+              ) : (
+                <span className="text-muted">-</span>
+              )}
+            </DataTableCell>
+          </DataTableRow>
+        );
+      })}
+    </DataTable>
   );
 }

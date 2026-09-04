@@ -1,6 +1,16 @@
 import type { ReactElement } from 'react';
 
 import { RestrictedNotice } from '@/components/restricted-notice';
+import {
+  Button,
+  Card,
+  HeroBanner,
+  Input,
+  MonoLabel,
+  PageSection,
+  StatusBadge,
+} from '@/components/ui';
+import { cn } from '@/lib/cn';
 import { canValidate } from '@/lib/rbac';
 import { getSession } from '@/lib/session';
 import {
@@ -9,35 +19,6 @@ import {
   validateSubmission,
 } from '@/lib/validations/validations-actions';
 import { getSubmissions } from '@/lib/validations/validations-server';
-
-const mono = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 10,
-  letterSpacing: '0.14em',
-  textTransform: 'uppercase' as const,
-  color: 'var(--muted)',
-};
-
-function statusBadge(status: 'pending' | 'validated' | 'rejected'): ReactElement {
-  const map = {
-    pending: { label: 'À valider', color: 'var(--ink)', bg: 'transparent' },
-    validated: { label: 'Validée', color: 'var(--ink)', bg: 'rgba(56,240,115,.14)' },
-    rejected: { label: 'Rejetée', color: '#b3261e', bg: 'transparent' },
-  }[status];
-  return (
-    <span
-      style={{
-        ...mono,
-        color: map.color,
-        background: map.bg,
-        border: '1px solid var(--line-light)',
-        padding: '3px 8px',
-      }}
-    >
-      {map.label}
-    </span>
-  );
-}
 
 export default async function ValidationsPage(): Promise<ReactElement> {
   const { role, user } = await getSession();
@@ -53,43 +34,25 @@ export default async function ValidationsPage(): Promise<ReactElement> {
   const { rows, counts, scopeNote } = await getSubmissions(role, user.name);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div
-        style={{
-          border: '1px solid var(--line-light)',
-          background: 'var(--black)',
-          color: 'var(--white)',
-          padding: '18px 22px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 16, fontWeight: 600 }}>
-              {counts.pending} semaine(s) à valider
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--muted-2)', marginTop: 4 }}>{scopeNote}</div>
-          </div>
-          {counts.pending > 0 && (
-            <form action={validateAll}>
-              <button
-                type="submit"
-                style={{
-                  background: 'var(--cyan-teal)',
-                  color: '#000',
-                  border: 'none',
-                  padding: '10px 16px',
-                  fontSize: 13,
-                  fontWeight: 500,
-                }}
-              >
-                Tout valider
-              </button>
-            </form>
-          )}
-        </div>
-      </div>
+    <PageSection>
+      <HeroBanner
+        className="border-line-light border"
+        title={`${counts.pending} semaine(s) à valider`}
+        description={scopeNote}
+        {...(counts.pending > 0
+          ? {
+              action: (
+                <form action={validateAll}>
+                  <Button type="submit" variant="primary" className="px-4 py-2.5 text-[13px]">
+                    Tout valider
+                  </Button>
+                </form>
+              ),
+            }
+          : {})}
+      />
 
-      <div style={{ display: 'flex', gap: 16, ...mono }}>
+      <div className="tracking-label text-muted flex gap-4 font-mono text-[10px] uppercase">
         <span>À valider · {counts.pending}</span>
         <span>Validées · {counts.validated}</span>
         <span>Rejetées · {counts.rejected}</span>
@@ -99,158 +62,81 @@ export default async function ValidationsPage(): Promise<ReactElement> {
         const gap = row.hours - 40;
         const gapLabel = gap === 0 ? 'conforme' : `${gap > 0 ? '+' : ''}${gap} h`;
         return (
-          <div
-            key={row.id}
-            style={{ border: '1px solid var(--line-light)', background: 'var(--white)' }}
-          >
-            <div
-              style={{
-                padding: '16px 22px',
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 16,
-                alignItems: 'center',
-                borderBottom: '1px solid var(--line-light)',
-              }}
-            >
-              <div style={{ flex: '1 1 240px', minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 500 }}>{row.personName}</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+          <Card key={row.id} padding="none">
+            <div className="border-line-light flex flex-wrap items-center gap-4 border-b px-[22px] py-4">
+              <div className="min-w-0 flex-[1_1_240px]">
+                <div className="text-[14px] font-medium">{row.personName}</div>
+                <div className="text-muted text-[12px]">
                   {row.department} · N+1 {row.managerName} · {row.weekLabel}
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 20 }}>
+              <div className="flex gap-5">
                 <div>
-                  <div style={mono}>Saisi</div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14 }}>{row.hours} h</div>
+                  <MonoLabel>Saisi</MonoLabel>
+                  <div className="font-mono text-[14px]">{row.hours} h</div>
                 </div>
                 <div>
-                  <div style={mono}>Facturable</div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14 }}>
-                    {row.billable} h
-                  </div>
+                  <MonoLabel>Facturable</MonoLabel>
+                  <div className="font-mono text-[14px]">{row.billable} h</div>
                 </div>
                 <div>
-                  <div style={mono}>Écart</div>
+                  <MonoLabel>Écart</MonoLabel>
                   <div
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 14,
-                      color: gap === 0 ? 'var(--ink)' : '#b3261e',
-                    }}
+                    className={cn('font-mono text-[14px]', gap === 0 ? 'text-ink' : 'text-danger')}
                   >
                     {gapLabel}
                   </div>
                 </div>
               </div>
-              {statusBadge(row.status)}
+              <StatusBadge status={row.status} />
             </div>
 
-            {row.flags.length > 0 && (
-              <div
-                style={{
-                  padding: '10px 22px',
-                  borderBottom: '1px solid var(--line-light)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 4,
-                }}
-              >
+            {row.flags.length > 0 ? (
+              <div className="border-line-light flex flex-col gap-1 border-b px-[22px] py-2.5">
                 {row.flags.map((flag) => (
-                  <span key={flag} style={{ fontSize: 12, color: '#b3261e' }}>
+                  <span key={flag} className="text-danger text-[12px]">
                     {flag}
                   </span>
                 ))}
               </div>
-            )}
-            {row.motif && (
-              <div
-                style={{
-                  padding: '10px 22px',
-                  borderBottom: '1px solid var(--line-light)',
-                  fontSize: 12,
-                  color: 'var(--muted)',
-                }}
-              >
+            ) : null}
+            {row.motif ? (
+              <div className="border-line-light text-muted border-b px-[22px] py-2.5 text-[12px]">
                 Motif : {row.motif}
               </div>
-            )}
+            ) : null}
 
-            <div style={{ padding: '12px 22px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div className="flex flex-col gap-1.5 px-[22px] py-3">
               {row.lines.map((line, index) => (
-                <div
-                  key={`${row.id}-${index}`}
-                  style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}
-                >
-                  <span style={{ color: 'var(--muted)' }}>
+                <div key={`${row.id}-${index}`} className="flex justify-between text-[12px]">
+                  <span className="text-muted">
                     {line.project} · {line.poste} · {line.task}
                   </span>
-                  <span style={{ fontFamily: 'var(--font-mono)' }}>{line.hours} h</span>
+                  <span className="font-mono">{line.hours} h</span>
                 </div>
               ))}
             </div>
 
-            {row.status === 'pending' && (
-              <div
-                style={{
-                  padding: '12px 22px',
-                  borderTop: '1px solid var(--line-light)',
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: 10,
-                  alignItems: 'center',
-                }}
-              >
+            {row.status === 'pending' ? (
+              <div className="border-line-light flex flex-wrap items-center gap-2.5 border-t px-[22px] py-3">
                 <form action={validateSubmission}>
                   <input type="hidden" name="id" value={row.id} />
-                  <button
-                    type="submit"
-                    style={{
-                      background: 'var(--cyan-teal)',
-                      color: '#000',
-                      border: 'none',
-                      padding: '9px 16px',
-                      fontSize: 13,
-                      fontWeight: 500,
-                    }}
-                  >
+                  <Button type="submit" variant="primary" className="px-4 py-2 text-[13px]">
                     Valider
-                  </button>
+                  </Button>
                 </form>
-                <form
-                  action={rejectSubmission}
-                  style={{ display: 'flex', gap: 8, alignItems: 'center', flex: '1 1 auto' }}
-                >
+                <form action={rejectSubmission} className="flex flex-1 items-center gap-2">
                   <input type="hidden" name="id" value={row.id} />
-                  <input
-                    name="motif"
-                    placeholder="Motif de rejet"
-                    style={{
-                      flex: 1,
-                      minWidth: 160,
-                      border: '1px solid var(--line-light)',
-                      padding: '8px 10px',
-                      fontSize: 13,
-                    }}
-                  />
-                  <button
-                    type="submit"
-                    style={{
-                      background: 'var(--white)',
-                      color: '#b3261e',
-                      border: '1px solid var(--line-light)',
-                      padding: '9px 16px',
-                      fontSize: 13,
-                    }}
-                  >
+                  <Input name="motif" placeholder="Motif de rejet" width="flex" />
+                  <Button type="submit" variant="danger" className="px-4 py-2 text-[13px]">
                     Rejeter
-                  </button>
+                  </Button>
                 </form>
               </div>
-            )}
-          </div>
+            ) : null}
+          </Card>
         );
       })}
-    </div>
+    </PageSection>
   );
 }

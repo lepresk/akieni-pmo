@@ -1,38 +1,26 @@
 import type { ReactElement } from 'react';
 
+import {
+  Button,
+  FormRow,
+  Input,
+  KpiGrid,
+  KpiTile,
+  List,
+  PageSection,
+  Select,
+  StatusBadge,
+} from '@/components/ui';
 import { approveLeave, createLeave, refuseLeave } from '@/lib/leaves/leaves-actions';
 import { getLeaves } from '@/lib/leaves/leaves-server';
 import { canApproveLeave } from '@/lib/rbac';
 import { getSession } from '@/lib/session';
 
-const mono = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 10,
-  letterSpacing: '0.14em',
-  textTransform: 'uppercase' as const,
-  color: 'var(--muted)',
-};
-
-function statusBadge(status: 'pending' | 'validated' | 'rejected'): ReactElement {
-  const map = {
-    pending: { label: 'En attente', color: 'var(--ink)', bg: 'transparent' },
-    validated: { label: 'Validé', color: 'var(--ink)', bg: 'rgba(56,240,115,.14)' },
-    rejected: { label: 'Refusé', color: '#b3261e', bg: 'transparent' },
-  }[status];
-  return (
-    <span
-      style={{
-        ...mono,
-        color: map.color,
-        background: map.bg,
-        border: '1px solid var(--line-light)',
-        padding: '3px 8px',
-      }}
-    >
-      {map.label}
-    </span>
-  );
-}
+const STATUS_LABELS = {
+  pending: 'En attente',
+  validated: 'Validé',
+  rejected: 'Refusé',
+} as const satisfies Record<'pending' | 'validated' | 'rejected', string>;
 
 export default async function CongesPage(): Promise<ReactElement> {
   const { role } = await getSession();
@@ -46,175 +34,69 @@ export default async function CongesPage(): Promise<ReactElement> {
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          border: '1px solid var(--line-light)',
-          background: 'var(--white)',
-        }}
-      >
+    <PageSection>
+      <KpiGrid>
         {kpis.map((kpi) => (
-          <div
+          <KpiTile
             key={kpi.label}
-            style={{
-              padding: '20px 22px',
-              borderRight: '1px solid var(--line-light)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-            }}
-          >
-            <span style={mono}>{kpi.label}</span>
-            <span style={{ fontSize: 30, fontWeight: 600, letterSpacing: '-0.045em' }}>
-              {kpi.value}
-            </span>
-          </div>
+            label={kpi.label}
+            value={<span className="text-[30px]">{kpi.value}</span>}
+            className="px-[22px] py-5"
+          />
         ))}
-      </div>
+      </KpiGrid>
 
-      <form
-        action={createLeave}
-        style={{
-          border: '1px solid var(--line-light)',
-          background: 'var(--white)',
-          padding: '16px 22px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 10,
-          alignItems: 'center',
-        }}
-      >
-        <span style={mono}>Demander un congé</span>
-        <select
-          name="type"
-          style={{ border: '1px solid var(--line-light)', padding: '8px 10px', fontSize: 13 }}
-        >
-          <option>Congé payé</option>
-          <option>Maladie</option>
-          <option>Congé sans solde</option>
-          <option>Récupération</option>
-        </select>
-        <input
-          name="from"
-          placeholder="Du (ex. 12 août)"
-          style={{
-            border: '1px solid var(--line-light)',
-            padding: '8px 10px',
-            fontSize: 13,
-            width: 140,
-          }}
-        />
-        <input
-          name="to"
-          placeholder="Au (ex. 23 août)"
-          style={{
-            border: '1px solid var(--line-light)',
-            padding: '8px 10px',
-            fontSize: 13,
-            width: 140,
-          }}
-        />
-        <input
-          name="days"
-          type="number"
-          min={0}
-          step={0.5}
-          placeholder="Jours"
-          style={{
-            border: '1px solid var(--line-light)',
-            padding: '8px 10px',
-            fontSize: 13,
-            width: 90,
-          }}
-        />
-        <input
-          name="note"
-          placeholder="Note (optionnel)"
-          style={{
-            border: '1px solid var(--line-light)',
-            padding: '8px 10px',
-            fontSize: 13,
-            flex: '1 1 160px',
-          }}
-        />
-        <button
-          type="submit"
-          style={{
-            background: 'var(--cyan-teal)',
-            color: '#000',
-            border: 'none',
-            padding: '9px 16px',
-            fontSize: 13,
-            fontWeight: 500,
-          }}
-        >
-          Demander
-        </button>
+      <form action={createLeave}>
+        <FormRow label="Demander un congé" className="items-center px-[22px]">
+          <Select name="type">
+            <option>Congé payé</option>
+            <option>Maladie</option>
+            <option>Congé sans solde</option>
+            <option>Récupération</option>
+          </Select>
+          <Input name="from" placeholder="Du (ex. 12 août)" width={140} />
+          <Input name="to" placeholder="Au (ex. 23 août)" width={140} />
+          <Input name="days" type="number" min={0} step={0.5} placeholder="Jours" width={90} />
+          <Input name="note" placeholder="Note (optionnel)" className="min-w-0 flex-[1_1_160px]" />
+          <Button type="submit" variant="primary" className="px-4 py-[9px] text-[13px]">
+            Demander
+          </Button>
+        </FormRow>
       </form>
 
-      <div style={{ border: '1px solid var(--line-light)', background: 'var(--white)' }}>
+      <List>
         {rows.map((row) => (
           <div
             key={row.id}
-            style={{
-              padding: '16px 22px',
-              borderBottom: '1px solid var(--line-light)',
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 16,
-              alignItems: 'center',
-            }}
+            className="border-line-light flex flex-wrap items-center gap-4 border-b px-[22px] py-4 last:border-b-0"
           >
-            <div style={{ flex: '1 1 260px', minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 500 }}>{row.personName}</div>
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+            <div className="min-w-0 flex-[1_1_260px]">
+              <div className="text-ink text-[14px] font-medium">{row.personName}</div>
+              <div className="text-muted text-[12px]">
                 {row.type} · {row.fromLabel} → {row.toLabel} · {row.days} j
               </div>
-              {row.note && (
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>{row.note}</div>
-              )}
+              {row.note && <div className="text-muted mt-1 text-[12px]">{row.note}</div>}
             </div>
-            {statusBadge(row.status)}
+            <StatusBadge status={row.status} label={STATUS_LABELS[row.status]} />
             {canAct && row.status === 'pending' && (
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div className="flex gap-2">
                 <form action={approveLeave}>
                   <input type="hidden" name="id" value={row.id} />
-                  <button
-                    type="submit"
-                    style={{
-                      background: 'var(--cyan-teal)',
-                      color: '#000',
-                      border: 'none',
-                      padding: '8px 14px',
-                      fontSize: 13,
-                      fontWeight: 500,
-                    }}
-                  >
+                  <Button type="submit" variant="primary" className="px-3.5 py-2 text-[13px]">
                     Valider
-                  </button>
+                  </Button>
                 </form>
                 <form action={refuseLeave}>
                   <input type="hidden" name="id" value={row.id} />
-                  <button
-                    type="submit"
-                    style={{
-                      background: 'var(--white)',
-                      color: '#b3261e',
-                      border: '1px solid var(--line-light)',
-                      padding: '8px 14px',
-                      fontSize: 13,
-                    }}
-                  >
+                  <Button type="submit" variant="danger" className="px-3.5 py-2 text-[13px]">
                     Refuser
-                  </button>
+                  </Button>
                 </form>
               </div>
             )}
           </div>
         ))}
-      </div>
-    </div>
+      </List>
+    </PageSection>
   );
 }

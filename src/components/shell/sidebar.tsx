@@ -6,138 +6,62 @@ import { usePathname } from 'next/navigation';
 import type { ReactElement } from 'react';
 
 import { Icon } from '@/components/icons';
+import { MonoLabel, StatusDot } from '@/components/ui';
+import { getWeekSnapshot } from '@/lib/calendar/week-display';
 import { NAV_ITEMS } from '@/lib/navigation';
+import { cn } from '@/lib/cn';
 
 export function Sidebar({ badges }: { readonly badges: Record<string, string> }): ReactElement {
   const pathname = usePathname();
+  const week = getWeekSnapshot();
 
   return (
-    <aside
-      style={{
-        flex: '0 0 240px',
-        width: 240,
-        background: 'var(--off-black)',
-        borderRight: '1px solid var(--line)',
-        position: 'sticky',
-        top: 0,
-        height: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      <div
-        style={{
-          height: 72,
-          flex: '0 0 72px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          padding: '0 20px',
-          borderBottom: '1px solid var(--line)',
-        }}
-      >
-        <span style={{ fontSize: 18, lineHeight: 1, color: 'var(--cyan-teal)' }}>◆</span>
-        <span
-          style={{ fontWeight: 600, letterSpacing: '-0.02em', fontSize: 17, color: 'var(--white)' }}
-        >
-          Akieni
-        </span>
-        <span
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            letterSpacing: '0.14em',
-            color: 'var(--muted-2)',
-            border: '1px solid var(--line)',
-            padding: '3px 6px',
-          }}
-        >
+    <aside className="border-line bg-off-black sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r">
+      <div className="h-nav border-line flex shrink-0 items-center gap-2.5 border-b px-5">
+        <span className="text-cyan text-[18px] leading-none">◆</span>
+        <span className="text-[17px] font-semibold tracking-tight text-white">Akieni</span>
+        <span className="border-line tracking-label text-muted-2 border px-1.5 py-0.5 font-mono text-[10px]">
           PMO
         </span>
       </div>
 
-      <nav
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: '16px 12px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 2,
-        }}
-      >
+      <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-4">
         {NAV_ITEMS.map((item) => {
           const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
           return (
             <Link
               key={item.key}
               href={item.href as Route}
-              className="ak-nav-item"
-              data-active={active}
               title={item.label}
+              data-active={active}
+              className={cn(
+                'text-muted-2 flex w-full items-center gap-2.5 border-l-2 border-transparent px-3 py-[11px] text-left text-[14px] transition-all duration-[var(--dur-1)] ease-[var(--ease)] hover:text-white',
+                active && 'border-l-cyan bg-ink-2 text-white',
+              )}
             >
-              <span style={{ display: 'flex', width: 18, flex: '0 0 18px', opacity: 0.9 }}>
+              <span className="flex w-[18px] shrink-0 opacity-90">
                 <Icon name={item.icon} />
               </span>
-              <span style={{ flex: 1, whiteSpace: 'nowrap' }}>{item.label}</span>
-              {badges[item.key] ? <span className="ak-nav-badge">{badges[item.key]}</span> : null}
+              <span className="flex-1 whitespace-nowrap">{item.label}</span>
+              {badges[item.key] ? (
+                <span className="bg-cyan ml-auto px-1.5 py-0.5 font-mono text-[10px] text-black">
+                  {badges[item.key]}
+                </span>
+              ) : null}
             </Link>
           );
         })}
       </nav>
 
-      <div
-        style={{
-          padding: '16px 20px',
-          borderTop: '1px solid var(--line)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 6,
-        }}
-      >
-        <span
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            letterSpacing: '0.14em',
-            color: 'var(--muted-2)',
-            textTransform: 'uppercase',
-          }}
-        >
-          Semaine 31 · statut
-        </span>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            fontSize: 13,
-            color: 'var(--white)',
-          }}
-        >
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: 999,
-              background: 'var(--cyan-teal)',
-              boxShadow: '0 0 0 3px rgba(18,235,214,.18)',
-            }}
-          />
+      <div className="border-line flex flex-col gap-1.5 border-t px-5 py-4">
+        <MonoLabel tone="onDark">{week.shortLabel} · statut</MonoLabel>
+        <div className="flex items-center gap-2 text-[13px] text-white">
+          <StatusDot tone="accent" />
           <span>Saisie en cours</span>
         </div>
-        <div
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            letterSpacing: '0.14em',
-            color: 'var(--muted-2)',
-            textTransform: 'uppercase',
-            marginTop: 6,
-          }}
-        >
-          Est. 2023 · v. 26.05
-        </div>
+        <MonoLabel tone="onDark" className="mt-1.5">
+          {week.rangeLabel}
+        </MonoLabel>
       </div>
     </aside>
   );
