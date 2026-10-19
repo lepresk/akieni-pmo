@@ -2,25 +2,32 @@
 
 import { useState, type ReactElement } from 'react';
 
-import { Card, MonoLabel, Toggle } from '@/components/ui';
+import { Card, EmptyState, MonoLabel, Toggle } from '@/components/ui';
+import { setNotificationRule } from '@/lib/notifications/notifications-actions';
+import type { NotificationRuleView } from '@/lib/notifications/notifications-server';
 
-interface Rule {
-  readonly label: string;
-  readonly detail: string;
-}
+export function NotifRules({
+  rules: initialRules,
+}: {
+  readonly rules: readonly NotificationRuleView[];
+}): ReactElement {
+  const [rules, setRules] = useState<readonly NotificationRuleView[]>(initialRules);
+  const [pendingId, setPendingId] = useState<string | null>(null);
 
-const RULES: readonly Rule[] = [
-  { label: 'Rappel quotidien de saisie', detail: '16:30 · jours ouvrés · e-mail + Slack' },
-  { label: 'Alerte overbooking', detail: "> 100 % d'allocation sur 2 semaines glissantes" },
-  { label: 'Alerte dépassement budget', detail: "seuil 90 % du budget d'un poste de coût" },
-  { label: 'Jalon en retard', detail: 'notification au PM du niveau concerné' },
-];
+  const toggle = async (rule: NotificationRuleView): Promise<void> => {
+    const nextEnabled = !rule.enabled;
+    setPendingId(rule.id);
+    setRules((current) =>
+      current.map((row) => (row.id === rule.id ? { ...row, enabled: nextEnabled } : row)),
+    );
 
-export function NotifRules(): ReactElement {
-  const [enabled, setEnabled] = useState<readonly boolean[]>([true, true, false, true]);
-
-  const toggle = (index: number): void => {
-    setEnabled((current) => current.map((value, i) => (i === index ? !value : value)));
+    const result = await setNotificationRule({ id: rule.id, enabled: nextEnabled });
+    if (!result.ok) {
+      setRules((current) =>
+        current.map((row) => (row.id === rule.id ? { ...row, enabled: rule.enabled } : row)),
+      );
+    }
+    setPendingId(null);
   };
 
   return (
@@ -28,21 +35,30 @@ export function NotifRules(): ReactElement {
       <div className="border-line-light border-b px-[22px] py-4">
         <MonoLabel>Règles de rappel</MonoLabel>
       </div>
-      {RULES.map((rule, index) => {
-        const on = enabled[index] ?? false;
-        return (
-          <div
-            key={rule.label}
-            className="border-line-light flex items-center gap-3.5 border-b px-[22px] py-3.5 last:border-b-0"
-          >
-            <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-medium">{rule.label}</div>
-              <div className="text-muted text-[12px]">{rule.detail}</div>
+      {rules.length === 0 ? (
+        <EmptyState>Aucune règle enregistrée.</EmptyState>
+      ) : (
+        rules.map((rule) => {
+          const busy = pendingId === rule.id;
+          return (
+            <div
+              key={rule.id}
+              className="border-line-light flex items-center gap-3.5 border-b px-[22px] py-3.5 last:border-b-0"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] font-medium">{rule.label}</div>
+              </div>
+              <Toggle
+                pressed={rule.enabled}
+                onPressedChange={() => {
+                  if (!busy) void toggle(rule);
+                }}
+                aria-label={rule.label}
+              />
             </div>
-            <Toggle pressed={on} onPressedChange={() => toggle(index)} aria-label={rule.label} />
-          </div>
-        );
-      })}
+          );
+        })
+      )}
     </Card>
   );
 }

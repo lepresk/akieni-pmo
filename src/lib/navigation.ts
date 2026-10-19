@@ -2,6 +2,7 @@
 
 import type { IconName } from '@/components/icons';
 import { getWeekSnapshot, shiftWeekSnapshot } from '@/lib/calendar/week-display';
+import type { SubmissionWeekStatus } from '@/lib/timesheet/submission-week-status';
 
 export interface NavItem {
   readonly key: string;
@@ -45,13 +46,25 @@ export const SCREEN_TITLES: Readonly<Record<string, string>> = {
   '/audit': "Journal d'audit",
 };
 
+/** Reserved badge key: timesheet week status code for the sidebar footer (not a nav chip). */
+export const WEEK_STATUS_BADGE_KEY = 'weekStatus';
+
+/** French labels for the current week's timesheet status (sidebar footer). */
+export const SUBMISSION_WEEK_STATUS_LABELS: Readonly<Record<SubmissionWeekStatus, string>> = {
+  missing: 'Saisie à faire',
+  pending: 'Saisie en cours',
+  validated: 'Semaine validée',
+  rejected: 'Saisie rejetée',
+};
+
+/** Non-numeric static meta only - live counts belong in badges / queue, not invented here. */
 const STATIC_SCREEN_META: Readonly<Record<string, string>> = {
-  '/conges': '2 demandes en attente',
-  '/projets': '7 projets · 4 actifs',
+  '/conges': 'Demandes & soldes',
+  '/projets': 'Portefeuille',
   '/depenses': 'Registre comptable',
-  '/reporting': 'Portefeuille · 8 semaines',
+  '/reporting': 'Portefeuille',
   '/audit': 'Gouvernance · conservation 5 ans',
-  '/notifications': '3 non lues',
+  '/notifications': 'Centre de notifications',
 };
 
 /** Mono metadata next to the screen title (date-aware where the label depends on the calendar). */

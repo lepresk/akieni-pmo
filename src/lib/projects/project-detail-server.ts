@@ -1,5 +1,8 @@
 import { asc, eq } from 'drizzle-orm';
 
+import { writeAuditLog } from '@/lib/audit/audit-server';
+import { getPlanWeekCodes } from '@/lib/capacity/capacity-server';
+import { resolvePlanWeekLabel } from '@/lib/capacity/plan-week-label';
 import { db } from '@/lib/db';
 import {
   activities,
@@ -14,7 +17,10 @@ import {
   projects,
   submissions,
 } from '@/lib/db/schema';
+import { sumValidatedDaysByProjectName } from '@/lib/projects/project-spent';
 import { canMargin, type Role } from '@/lib/rbac';
+import { getSession } from '@/lib/session';
+import { normalizeSubmissionLine, sumLineHours } from '@/lib/timesheet/normalize-submission-line';
 
 /** Full read for the project hub, optionally scoped to a sub-project. Server-only. */
 
@@ -24,15 +30,17 @@ export interface NodeView {
   readonly budgetDays: number;
 }
 export interface ActivityView {
+  readonly id: string;
   readonly poste: string;
   readonly name: string;
   readonly responsible: string | null;
-  readonly fromWeek: number;
-  readonly toWeek: number;
+  readonly fromWeekLabel: string;
+  readonly toWeekLabel: string;
   readonly days: number;
   readonly progress: number;
 }
 export interface AssignmentView {
+  readonly id: string;
   readonly employeeName: string;
   readonly allocationPct: number;
   readonly projectTjm: number | null;
@@ -96,7 +104,6 @@ export async function getProjectHub(
       model: projects.model,
       nature: projects.nature,
       budgetDays: projects.budgetDays,
-      spentDays: projects.spentDays,
       description: projects.description,
       costLoad: projects.costLoad,
       clientName: clients.name,
@@ -110,48 +117,56 @@ export async function getProjectHub(
 
   if (!row) return null;
 
-  const [centers, nodeRows, envelopeRows, actRows, resRows, amendRows, allExpenses, allSubs] =
-    await Promise.all([
-      db
-        .select({ label: costCenters.label, billable: costCenters.billable })
-        .from(costCenters)
-        .where(eq(costCenters.projectId, id))
-        .orderBy(asc(costCenters.label)),
-      db
-        .select({
-          name: projectNodes.name,
-          pmName: projectNodes.pmName,
-          budgetDays: projectNodes.budgetDays,
-        })
-        .from(projectNodes)
-        .where(eq(projectNodes.projectId, id))
-        .orderBy(asc(projectNodes.position)),
-      db
-        .select({
-          sub: projectEnvelopes.sub,
-          mo: projectEnvelopes.mo,
-          achats: projectEnvelopes.achats,
-          mission: projectEnvelopes.mission,
-        })
-        .from(projectEnvelopes)
-        .where(eq(projectEnvelopes.projectId, id)),
-      db
-        .select()
-        .from(activities)
-        .where(eq(activities.projectId, id))
-        .orderBy(asc(activities.poste)),
-      db.select().from(assignments).where(eq(assignments.projectId, id)),
-      db.select().from(amendments).where(eq(amendments.projectId, id)),
-      db
-        .select({
-          projectName: expenses.projectName,
-          sub: expenses.sub,
-          amount: expenses.amount,
-          state: expenses.state,
-        })
-        .from(expenses),
-      db.select({ lines: submissions.lines, person: submissions.personName }).from(submissions),
-    ]);
+  const [
+    centers,
+    nodeRows,
+    envelopeRows,
+    actRows,
+    resRows,
+    amendRows,
+    allExpenses,
+    allSubs,
+    weekCodes,
+    spentByName,
+  ] = await Promise.all([
+    db
+      .select({ label: costCenters.label, billable: costCenters.billable })
+      .from(costCenters)
+      .where(eq(costCenters.projectId, id))
+      .orderBy(asc(costCenters.label)),
+    db
+      .select({
+        name: projectNodes.name,
+        pmName: projectNodes.pmName,
+        budgetDays: projectNodes.budgetDays,
+      })
+      .from(projectNodes)
+      .where(eq(projectNodes.projectId, id))
+      .orderBy(asc(projectNodes.position)),
+    db
+      .select({
+        sub: projectEnvelopes.sub,
+        mo: projectEnvelopes.mo,
+        achats: projectEnvelopes.achats,
+        mission: projectEnvelopes.mission,
+      })
+      .from(projectEnvelopes)
+      .where(eq(projectEnvelopes.projectId, id)),
+    db.select().from(activities).where(eq(activities.projectId, id)).orderBy(asc(activities.poste)),
+    db.select().from(assignments).where(eq(assignments.projectId, id)),
+    db.select().from(amendments).where(eq(amendments.projectId, id)),
+    db
+      .select({
+        projectName: expenses.projectName,
+        sub: expenses.sub,
+        amount: expenses.amount,
+        state: expenses.state,
+      })
+      .from(expenses),
+    db.select({ lines: submissions.lines, person: submissions.personName }).from(submissions),
+    getPlanWeekCodes(),
+    sumValidatedDaysByProjectName(),
+  ]);
 
   const envelope = envelopeRows.find((e) => (scope ? e.sub === scope : e.sub === null)) ??
     envelopeRows.find((e) => e.sub === null) ?? { mo: 0, achats: 0, mission: 0 };
@@ -167,19 +182,32 @@ export async function getProjectHub(
 
   const timeLines: TimeLineView[] = [];
   for (const submission of allSubs) {
-    for (const line of submission.lines) {
-      if (line.project === row.name) {
-        timeLines.push({
-          person: submission.person,
-          poste: line.poste,
-          task: line.task,
-          hours: line.hours,
-        });
-      }
+    for (const raw of submission.lines) {
+      const line = normalizeSubmissionLine(raw);
+      if (!line || line.project !== row.name) continue;
+      timeLines.push({
+        person: submission.person,
+        poste: line.poste,
+        task: line.activity,
+        hours: sumLineHours(line),
+      });
     }
   }
 
   const etcDays = actRows.reduce((sum, act) => sum + (act.days * (100 - act.progress)) / 100, 0);
+  const spentDays = Math.round(spentByName.get(row.name) ?? 0);
+  const showMargin = canMargin(role);
+
+  if (showMargin) {
+    const session = await getSession();
+    await writeAuditLog({
+      who: session.user.name,
+      role,
+      action: 'margin.read',
+      target: `project:${row.id}`,
+      sensitive: true,
+    });
+  }
 
   return {
     id: row.id,
@@ -192,23 +220,25 @@ export async function getProjectHub(
     pmName: row.pmName ?? '-',
     description: row.description,
     budgetDays: row.budgetDays,
-    spentDays: row.spentDays,
-    costLoad: canMargin(role) && row.costLoad !== null ? Number(row.costLoad) : null,
+    spentDays,
+    costLoad: showMargin && row.costLoad !== null ? Number(row.costLoad) : null,
     scope,
     costCenters: centers,
     nodes: nodeRows,
     envelope: { mo: envelope.mo, achats: envelope.achats, mission: envelope.mission },
     spend,
     activities: actRows.map((a) => ({
+      id: a.id,
       poste: a.poste,
       name: a.name,
       responsible: a.responsible,
-      fromWeek: a.fromWeek,
-      toWeek: a.toWeek,
+      fromWeekLabel: resolvePlanWeekLabel(weekCodes, a.fromWeek),
+      toWeekLabel: resolvePlanWeekLabel(weekCodes, a.toWeek),
       days: a.days,
       progress: a.progress,
     })),
     assignments: resRows.map((r) => ({
+      id: r.id,
       employeeName: r.employeeName,
       allocationPct: r.allocationPct,
       projectTjm: r.projectTjm,

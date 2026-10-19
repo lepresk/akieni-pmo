@@ -16,6 +16,7 @@ import {
 } from '@/components/ui';
 import { RESTRICTED, dateSlash, dayMonthFr, seniorityLabel, xaf } from '@/lib/display';
 import { canRef, canSalary } from '@/lib/rbac';
+import { deactivateCatalogForm } from '@/lib/referentials/referentials-actions';
 import {
   getCostCenterCatalog,
   getHolidays,
@@ -80,7 +81,7 @@ export default async function ReferentielsPage({
           }
         >
           {postes.map((c) => (
-            <DataTableRow key={c.label} columns={POSTES_COLUMNS}>
+            <DataTableRow key={c.id} columns={POSTES_COLUMNS}>
               <DataTableCell>{c.label}</DataTableCell>
               <DataTableCell tone={c.billable ? 'default' : 'muted'} className="text-[12px]">
                 {c.billable ? 'Facturable' : 'Non facturable'}
@@ -89,9 +90,12 @@ export default async function ReferentielsPage({
                 {c.usage} projet{c.usage > 1 ? 's' : ''}
               </DataTableCell>
               <DataTableCell align="end">
-                <Button title="À venir" className="px-[11px] py-1.5">
-                  Désactiver
-                </Button>
+                <form action={deactivateCatalogForm} className="inline">
+                  <input type="hidden" name="id" value={c.id} />
+                  <Button type="submit" className="px-[11px] py-1.5">
+                    Désactiver
+                  </Button>
+                </form>
               </DataTableCell>
             </DataTableRow>
           ))}

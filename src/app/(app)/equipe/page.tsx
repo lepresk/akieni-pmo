@@ -15,7 +15,7 @@ export default async function EquipePage(): Promise<ReactElement> {
 
   return (
     <PageSection>
-      <MonoLabel>{rows.length} collaborateur(s) · Brazzaville · Pointe-Noire</MonoLabel>
+      <MonoLabel>{rows.length} collaborateur(s)</MonoLabel>
       <DataTable
         columns={columns}
         minWidth={860}

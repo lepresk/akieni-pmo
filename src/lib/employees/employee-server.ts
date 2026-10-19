@@ -1,9 +1,11 @@
 import { asc, avg, eq } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
+import { writeAuditLog } from '@/lib/audit/audit-server';
 import { db } from '@/lib/db';
 import { departments, employees, planLoad } from '@/lib/db/schema';
 import { canSalary, type Role } from '@/lib/rbac';
+import { getSession } from '@/lib/session';
 
 /** Data reads for a single employee record. Server-only. */
 
@@ -66,6 +68,17 @@ export async function getEmployeeDetail(id: string, role: Role): Promise<Employe
     .where(eq(planLoad.employeeId, id));
 
   const showSalary = canSalary(role);
+
+  if (showSalary) {
+    const session = await getSession();
+    await writeAuditLog({
+      who: session.user.name,
+      role,
+      action: 'salary.read',
+      target: `employee:${row.id}`,
+      sensitive: true,
+    });
+  }
 
   return {
     id: row.id,

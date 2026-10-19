@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 
 import {
   Badge,
+  Button,
   DataTable,
   DataTableCell,
   DataTableRow,
@@ -9,15 +10,18 @@ import {
   RestrictedPanel,
   type Tone,
 } from '@/components/ui';
+import { issueInvoiceForm } from '@/lib/billing/billing-actions';
+import { invoiceStatusLabel } from '@/lib/billing/billing-display';
 import { getInvoices } from '@/lib/billing/billing-server';
+import type { InvoiceStatus } from '@/lib/db/schema/billing';
 import { canInvoice } from '@/lib/rbac';
 import { getSession } from '@/lib/session';
 
-const COLUMNS = '0.8fr 1.8fr 1.2fr 0.8fr 0.9fr 1fr 1fr';
+const COLUMNS = '0.8fr 1.8fr 1.2fr 0.8fr 0.9fr 1fr 1.2fr';
 
-const EMPHASISED_STATUSES: readonly string[] = ['Validée', 'Envoyée'];
+const EMPHASISED_STATUSES: readonly InvoiceStatus[] = ['validated', 'issued'];
 
-function statusTone(status: string): Tone {
+function statusTone(status: InvoiceStatus): Tone {
   return EMPHASISED_STATUSES.includes(status) ? 'default' : 'muted';
 }
 
@@ -37,7 +41,7 @@ export default async function FacturationPage(): Promise<ReactElement> {
   return (
     <DataTable
       columns={COLUMNS}
-      minWidth={900}
+      minWidth={960}
       header={
         <>
           <MonoLabel>Réf.</MonoLabel>
@@ -59,7 +63,17 @@ export default async function FacturationPage(): Promise<ReactElement> {
           <DataTableCell className="font-mono text-[12px]">{row.quantityLabel}</DataTableCell>
           <DataTableCell className="font-mono text-[12px]">{row.amountLabel}</DataTableCell>
           <DataTableCell align="end">
-            <Badge tone={statusTone(row.status)}>{row.status}</Badge>
+            <div className="flex items-center justify-end gap-2">
+              <Badge tone={statusTone(row.status)}>{invoiceStatusLabel(row.status)}</Badge>
+              {row.status === 'validated' ? (
+                <form action={issueInvoiceForm} className="inline">
+                  <input type="hidden" name="id" value={row.id} />
+                  <Button type="submit" className="px-2.5 py-1.5">
+                    Émettre
+                  </Button>
+                </form>
+              ) : null}
+            </div>
           </DataTableCell>
         </DataTableRow>
       ))}

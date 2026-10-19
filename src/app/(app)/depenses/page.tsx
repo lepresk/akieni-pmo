@@ -18,7 +18,7 @@ import {
   StatusBadge,
 } from '@/components/ui';
 import { xaf } from '@/lib/display';
-import { advanceExpense, createExpense } from '@/lib/expenses/expenses-actions';
+import { advanceExpenseForm, createExpenseForm } from '@/lib/expenses/expenses-actions';
 import { getExpenses, type ExpenseView } from '@/lib/expenses/expenses-server';
 import { canExpense } from '@/lib/rbac';
 import { getSession } from '@/lib/session';
@@ -81,7 +81,7 @@ export default async function DepensesPage({
         ))}
       </KpiGrid>
 
-      <form action={createExpense}>
+      <form action={createExpenseForm}>
         <FormRow label="Saisir une dépense" className="items-center px-[22px]">
           <Select name="projectName">
             {options.map((option) => (
@@ -144,7 +144,7 @@ export default async function DepensesPage({
             </DataTableCell>
             <DataTableCell className="text-[12px]">
               {row.projectName}
-              {row.sub && row.sub !== '—' ? ` · ${row.sub}` : ''}
+              {row.sub && row.sub !== '-' ? ` · ${row.sub}` : ''}
             </DataTableCell>
             <DataTableCell className="font-mono text-[12px]">{xaf(row.amount)}</DataTableCell>
             <DataTableCell className={`text-[12px] ${row.billable ? 'text-ink' : 'text-muted'}`}>
@@ -155,7 +155,7 @@ export default async function DepensesPage({
             </DataTableCell>
             <DataTableCell align="end">
               {row.state !== 'paye' && (
-                <form action={advanceExpense} className="inline">
+                <form action={advanceExpenseForm} className="inline">
                   <input type="hidden" name="id" value={row.id} />
                   <Button type="submit" className="px-2.5 py-1.5">
                     {row.state === 'engage' ? '→ Facturer' : '→ Payer'}

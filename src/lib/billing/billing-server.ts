@@ -1,6 +1,7 @@
 import { asc } from 'drizzle-orm';
 
 import { db } from '@/lib/db';
+import type { InvoiceStatus } from '@/lib/db/schema/billing';
 import { invoices } from '@/lib/db/schema';
 
 /** Data reads for invoicing. Server-only. */
@@ -13,7 +14,7 @@ export interface InvoiceRow {
   readonly model: string;
   readonly quantityLabel: string;
   readonly amountLabel: string;
-  readonly status: string;
+  readonly status: InvoiceStatus;
 }
 
 export async function getInvoices(): Promise<readonly InvoiceRow[]> {

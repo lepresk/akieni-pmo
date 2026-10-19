@@ -13,4 +13,5 @@ export * from './plan';
 export * from './transactions';
 export * from './audit';
 export * from './billing';
+export * from './notifications';
 export * from './project-structure';

@@ -1,9 +1,9 @@
 'use client';
 
-import { useMemo, useState, type KeyboardEvent, type ReactElement } from 'react';
+import { useActionState, useMemo, useState, type KeyboardEvent, type ReactElement } from 'react';
 
 import { Icon } from '@/components/icons';
-import { Button, Card, FormRow, Input, MonoLabel, Select } from '@/components/ui';
+import { Button, Callout, Card, FormRow, Input, MonoLabel, Select } from '@/components/ui';
 import {
   getWeekSnapshot,
   shiftWeekSnapshot,
@@ -13,83 +13,90 @@ import {
 import { cn } from '@/lib/cn';
 import { dayMonthFr } from '@/lib/display';
 import type { ProjectOption } from '@/lib/timesheet/timesheet-server';
-import { declareMissionExpense, submitTimesheet } from '@/lib/timesheet/timesheet-actions';
+import {
+  submitTimesheetForm,
+  declareMissionExpense,
+  type TimesheetFormState,
+} from '@/lib/timesheet/timesheet-actions';
+import type { TimesheetLineInput } from '@/lib/timesheet/timesheet-schemas';
 
-const CAP = 8;
+const DAY_CAP_HOURS = 8;
 
 /** Shared grid template for the header, entry rows and totals row. */
 const GRID_COLS = 'grid-cols-[320px_repeat(7,1fr)_70px]';
 
+type DayHours = [number, number, number, number, number, number, number];
+
 interface Row {
   project: string;
   poste: string;
-  activite: string;
-  hours: number[];
-  budget: number;
-  remaining: number;
+  activity: string;
+  hours: DayHours;
+  budget: number | null;
+  remaining: number | null;
 }
 
-/** Starter lines with zero hours: the week is current, not a frozen demo July. */
-const DEFAULT_ROWS: readonly Row[] = [
-  {
-    project: 'SFEC · Facturation électronique',
-    poste: 'Développement',
-    activite: 'Développement des API métier',
-    hours: [0, 0, 0, 0, 0, 0, 0],
-    budget: 17,
-    remaining: 9,
-  },
-  {
-    project: 'SFEC · Facturation électronique',
-    poste: 'Recette / QA',
-    activite: 'Tests de charge',
-    hours: [0, 0, 0, 0, 0, 0, 0],
-    budget: 37,
-    remaining: 15,
-  },
-  {
-    project: 'CAMU · Couverture santé',
-    poste: 'Analyse fonctionnelle',
-    activite: 'Ateliers de cadrage',
-    hours: [0, 0, 0, 0, 0, 0, 0],
-    budget: 16,
-    remaining: 10,
-  },
-  {
-    project: 'Interne · Académie & avant-vente',
-    poste: 'Formation interne',
-    activite: 'Académie interne',
-    hours: [0, 0, 0, 0, 0, 0, 0],
-    budget: 43,
-    remaining: 12,
-  },
-];
+const EMPTY_HOURS: DayHours = [0, 0, 0, 0, 0, 0, 0];
+
+const INITIAL_FORM_STATE: TimesheetFormState = { error: null };
+
+function toDayHours(hours: readonly number[]): DayHours {
+  return [
+    hours[0] ?? 0,
+    hours[1] ?? 0,
+    hours[2] ?? 0,
+    hours[3] ?? 0,
+    hours[4] ?? 0,
+    hours[5] ?? 0,
+    hours[6] ?? 0,
+  ];
+}
+
+function rowsFromInitial(initialRows: readonly TimesheetLineInput[]): Row[] {
+  return initialRows.map((row) => ({
+    project: row.project,
+    poste: row.poste,
+    activity: row.activity,
+    hours: toDayHours(row.hours),
+    budget: null,
+    remaining: null,
+  }));
+}
 
 const isBillable = (project: string): boolean => !project.startsWith('Interne');
+
+function formatBudgetCell(remaining: number | null, budget: number | null): string {
+  const remainingLabel = remaining == null ? '-' : String(remaining);
+  const budgetLabel = budget == null ? '-' : String(budget);
+  return `reste ${remainingLabel} j / ${budgetLabel} j`;
+}
 
 export function SaisieGrid({
   options,
   initialWeek,
+  initialRows,
 }: {
   readonly options: readonly ProjectOption[];
   readonly initialWeek: WeekSnapshot;
+  readonly initialRows: readonly TimesheetLineInput[];
 }): ReactElement {
   const [week, setWeek] = useState<WeekSnapshot>(initialWeek);
   const days = week.days;
-  const [rows, setRows] = useState<Row[]>(DEFAULT_ROWS.map((r) => ({ ...r, hours: [...r.hours] })));
+  const [rows, setRows] = useState<Row[]>(() => rowsFromInitial(initialRows));
   const [selDay, setSelDay] = useState(() =>
     initialWeek.todayIndex >= 0 ? initialWeek.todayIndex : 0,
   );
   const [mobile, setMobile] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [formState, formAction] = useActionState(submitTimesheetForm, INITIAL_FORM_STATE);
 
   const [addProject, setAddProject] = useState(options[0]?.project ?? '');
   const [addPoste, setAddPoste] = useState(options[0]?.postes[0]?.label ?? '');
-  const [addActivite, setAddActivite] = useState(options[0]?.postes[0]?.activities[0] ?? '');
+  const [addActivity, setAddActivity] = useState(options[0]?.postes[0]?.activities[0] ?? '');
 
   const [bProject, setBProject] = useState(options[0]?.project ?? '');
   const [bPoste, setBPoste] = useState(options[0]?.postes[0]?.label ?? '');
-  const [bActivite, setBActivite] = useState(options[0]?.postes[0]?.activities[0] ?? '');
+  const [bActivity, setBActivity] = useState(options[0]?.postes[0]?.activities[0] ?? '');
   const [bHours, setBHours] = useState('7');
   const [bDays, setBDays] = useState<boolean[]>([true, true, true, true, true, false, false]);
 
@@ -118,13 +125,20 @@ export function SaisieGrid({
   const weekTotal = rows.reduce((s, row) => s + rowTotal(row), 0);
   const billableH = rows.filter((r) => isBillable(r.project)).reduce((s, r) => s + rowTotal(r), 0);
   const nonBillableH = weekTotal - billableH;
-  const payload = rows.map((r) => ({ project: r.project, poste: r.poste, hours: rowTotal(r) }));
+  const payload = rows.map((r) => ({
+    project: r.project,
+    poste: r.poste,
+    activity: r.activity,
+    hours: toDayHours(r.hours),
+  }));
   const weekLabel = submissionWeekLabel(week);
 
   const setCell = (ri: number, di: number, value: number): void => {
     setRows((cur) =>
       cur.map((row, i) =>
-        i === ri ? { ...row, hours: row.hours.map((h, d) => (d === di ? value : h)) } : row,
+        i === ri
+          ? { ...row, hours: toDayHours(row.hours.map((h, d) => (d === di ? value : h))) }
+          : row,
       ),
     );
   };
@@ -136,10 +150,10 @@ export function SaisieGrid({
       {
         project: addProject,
         poste: addPoste,
-        activite: addActivite || 'Saisie',
-        hours: [0, 0, 0, 0, 0, 0, 0],
-        budget: 20,
-        remaining: 20,
+        activity: addActivity || 'Saisie',
+        hours: [...EMPTY_HOURS],
+        budget: null,
+        remaining: null,
       },
     ]);
   };
@@ -147,7 +161,7 @@ export function SaisieGrid({
     setRows((cur) =>
       cur.map((row) => ({
         ...row,
-        hours: row.hours.map((h, d) => (d <= 4 ? (row.hours[selDay] ?? 0) : h)),
+        hours: toDayHours(row.hours.map((h, d) => (d <= 4 ? (row.hours[selDay] ?? 0) : h))),
       })),
     );
   };
@@ -166,10 +180,10 @@ export function SaisieGrid({
       {
         project: bProject,
         poste: bPoste,
-        activite: bActivite || 'Saisie',
-        hours: bDays.map((on) => (on ? h : 0)),
-        budget: 20,
-        remaining: 20,
+        activity: bActivity || 'Saisie',
+        hours: toDayHours(bDays.map((on) => (on ? h : 0))),
+        budget: null,
+        remaining: null,
       },
     ]);
     setBulkOpen(false);
@@ -182,7 +196,9 @@ export function SaisieGrid({
         const v = rows[ri]?.hours[di] ?? 0;
         setRows((cur) =>
           cur.map((row, i) =>
-            i === ri ? { ...row, hours: row.hours.map((h, d) => (d <= 4 ? v : h)) } : row,
+            i === ri
+              ? { ...row, hours: toDayHours(row.hours.map((h, d) => (d <= 4 ? v : h))) }
+              : row,
           ),
         );
       }
@@ -202,9 +218,12 @@ export function SaisieGrid({
             <div className="flex items-baseline justify-between">
               <span className="text-[18px] font-semibold">Ma journée</span>
               <span
-                className={cn('font-mono text-[14px]', dayTot > CAP ? 'text-danger' : 'text-ink')}
+                className={cn(
+                  'font-mono text-[14px]',
+                  dayTot > DAY_CAP_HOURS ? 'text-danger' : 'text-ink',
+                )}
               >
-                {dayTot} / {CAP} h
+                {dayTot} / {DAY_CAP_HOURS} h
               </span>
             </div>
             <div className="flex gap-1.5">
@@ -272,7 +291,7 @@ export function SaisieGrid({
               ›
             </button>
           </div>
-          <MonoLabel>Capacité {CAP} h/j · 5 j</MonoLabel>
+          <MonoLabel>Capacité {DAY_CAP_HOURS} h/j · 5 j</MonoLabel>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => setBulkOpen((v) => !v)}>
@@ -288,7 +307,7 @@ export function SaisieGrid({
           <Button onClick={() => setMobile(true)}>
             <Icon name="phone" size={14} /> Vue mobile
           </Button>
-          <form action={submitTimesheet}>
+          <form action={formAction}>
             <input type="hidden" name="rows" value={JSON.stringify(payload)} />
             <input type="hidden" name="weekLabel" value={weekLabel} />
             <input type="hidden" name="mondayIso" value={week.mondayIso} />
@@ -307,6 +326,8 @@ export function SaisieGrid({
         </div>
       </div>
 
+      {formState.error ? <Callout variant="warning">{formState.error}</Callout> : null}
+
       {bulkOpen && (
         <FormRow className="gap-[20px] px-[22px] py-[18px]">
           <label className="flex flex-col gap-1.5">
@@ -317,7 +338,7 @@ export function SaisieGrid({
                 const p = postesOf(e.target.value)[0];
                 setBProject(e.target.value);
                 setBPoste(p?.label ?? '');
-                setBActivite(p?.activities[0] ?? '');
+                setBActivity(p?.activities[0] ?? '');
               }}
               className="min-w-[240px]"
             >
@@ -332,7 +353,7 @@ export function SaisieGrid({
               value={bPoste}
               onChange={(e) => {
                 setBPoste(e.target.value);
-                setBActivite(activitiesOf(bProject, e.target.value)[0] ?? '');
+                setBActivity(activitiesOf(bProject, e.target.value)[0] ?? '');
               }}
               className="min-w-[180px]"
             >
@@ -344,8 +365,8 @@ export function SaisieGrid({
           <label className="flex flex-col gap-1.5">
             <MonoLabel>Activité</MonoLabel>
             <Select
-              value={bActivite}
-              onChange={(e) => setBActivite(e.target.value)}
+              value={bActivity}
+              onChange={(e) => setBActivity(e.target.value)}
               className="min-w-[200px]"
             >
               {activitiesOf(bProject, bPoste).map((a) => (
@@ -411,6 +432,13 @@ export function SaisieGrid({
             <MonoLabel className="px-2 py-3 text-right">Total</MonoLabel>
           </div>
 
+          {rows.length === 0 ? (
+            <div className="text-muted px-4 py-6 text-[13px]">
+              Aucune ligne pour cette semaine. Ajoutez un projet ci-dessous ou soumettez après
+              saisie.
+            </div>
+          ) : null}
+
           {rows.map((row, ri) => (
             <div
               key={ri}
@@ -424,16 +452,16 @@ export function SaisieGrid({
                 <span className="flex min-w-0 flex-col gap-0.5">
                   <span className="text-[13px]">{row.project}</span>
                   <span className="text-muted text-[11px]">
-                    {row.poste} · {row.activite}
+                    {row.poste} · {row.activity}
                   </span>
                   <span
                     className={cn(
                       'font-mono text-[10px]',
-                      row.remaining <= 2 ? 'text-danger' : 'text-muted',
+                      row.remaining != null && row.remaining <= 2 ? 'text-danger' : 'text-muted',
                     )}
                   >
-                    reste {row.remaining} j / {row.budget} j
-                    {row.remaining <= 2 ? ' · quasi épuisé' : ''}
+                    {formatBudgetCell(row.remaining, row.budget)}
+                    {row.remaining != null && row.remaining <= 2 ? ' · quasi épuisé' : ''}
                   </span>
                 </span>
                 <Button
@@ -472,7 +500,7 @@ export function SaisieGrid({
                   key={d.iso}
                   className={cn(
                     'py-2.5 text-center font-mono text-[12px]',
-                    t > CAP ? 'bg-danger/10 text-danger' : 'text-ink bg-transparent',
+                    t > DAY_CAP_HOURS ? 'bg-danger/10 text-danger' : 'text-ink bg-transparent',
                   )}
                 >
                   {t === 0 ? '-' : t}
@@ -491,7 +519,7 @@ export function SaisieGrid({
                 setAddProject(e.target.value);
                 const p = postesOf(e.target.value)[0];
                 setAddPoste(p?.label ?? '');
-                setAddActivite(p?.activities[0] ?? '');
+                setAddActivity(p?.activities[0] ?? '');
               }}
             >
               {options.map((o) => (
@@ -502,14 +530,14 @@ export function SaisieGrid({
               value={addPoste}
               onChange={(e) => {
                 setAddPoste(e.target.value);
-                setAddActivite(activitiesOf(addProject, e.target.value)[0] ?? '');
+                setAddActivity(activitiesOf(addProject, e.target.value)[0] ?? '');
               }}
             >
               {postesOf(addProject).map((p) => (
                 <option key={p.label}>{p.label}</option>
               ))}
             </Select>
-            <Select value={addActivite} onChange={(e) => setAddActivite(e.target.value)}>
+            <Select value={addActivity} onChange={(e) => setAddActivity(e.target.value)}>
               {activitiesOf(addProject, addPoste).map((a) => (
                 <option key={a}>{a}</option>
               ))}

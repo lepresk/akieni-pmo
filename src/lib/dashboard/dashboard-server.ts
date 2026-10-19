@@ -1,8 +1,10 @@
-import { avg } from 'drizzle-orm';
+import { avg, count, eq } from 'drizzle-orm';
 
+import { getWeekSnapshot } from '@/lib/calendar/week-display';
 import { db } from '@/lib/db';
-import { planLoad, projects } from '@/lib/db/schema';
+import { invoices, planLoad, projects, submissions } from '@/lib/db/schema';
 import { canInvoice, canMargin, canStaff, canValidate, type Role } from '@/lib/rbac';
+import { getSubmissionWeekStatus } from '@/lib/timesheet/submission-week-status';
 
 /** Data reads for the role-based home queue. Server-only. */
 
@@ -53,6 +55,21 @@ export async function getDashboard(role: Role, employeeId: string | null): Promi
       )
     : 0;
 
+  const week = getWeekSnapshot();
+  const weekStatus = await getSubmissionWeekStatus(employeeId, week.mondayIso);
+
+  const [pendingSubs] = await db
+    .select({ n: count() })
+    .from(submissions)
+    .where(eq(submissions.status, 'pending'));
+  const pendingValidations = Number(pendingSubs?.n ?? 0);
+
+  const [draftInvoices] = await db
+    .select({ n: count() })
+    .from(invoices)
+    .where(eq(invoices.status, 'draft'));
+  const draftInvoiceCount = Number(draftInvoices?.n ?? 0);
+
   const queue: QueueItem[] = [];
   if (canStaff(role) && overbooked.length > 0) {
     queue.push({
@@ -72,7 +89,7 @@ export async function getDashboard(role: Role, employeeId: string | null): Promi
       urgent: true,
     });
   }
-  if (['staff', 'pm', 'manager'].includes(role)) {
+  if (['staff', 'pm', 'manager'].includes(role) && weekStatus === 'missing') {
     queue.push({
       key: 'timesheet',
       label: "Votre semaine n'est pas soumise",
@@ -81,7 +98,7 @@ export async function getDashboard(role: Role, employeeId: string | null): Promi
       urgent: false,
     });
   }
-  if (canValidate(role)) {
+  if (canValidate(role) && pendingValidations > 0) {
     queue.push({
       key: 'validate',
       label: 'File de validation',
@@ -90,7 +107,7 @@ export async function getDashboard(role: Role, employeeId: string | null): Promi
       urgent: false,
     });
   }
-  if (canInvoice(role)) {
+  if (canInvoice(role) && draftInvoiceCount > 0) {
     queue.push({
       key: 'invoice',
       label: 'Pré-factures à produire',
@@ -113,20 +130,16 @@ export async function getDashboard(role: Role, employeeId: string | null): Promi
       delta: 'portefeuille',
       deltaColor: 'var(--muted)',
     },
-    canMargin(role)
-      ? {
-          label: 'Marge portefeuille',
-          value: `${marginAvg} %`,
-          delta: 'moyenne',
-          deltaColor: 'var(--muted)',
-        }
-      : {
-          label: 'Jours à saisir',
-          value: '3',
-          delta: 'avant vendredi 18:00',
-          deltaColor: '#b3261e',
-        },
   ];
+
+  if (canMargin(role)) {
+    kpis.push({
+      label: 'Marge portefeuille',
+      value: `${marginAvg} %`,
+      delta: 'moyenne',
+      deltaColor: 'var(--muted)',
+    });
+  }
 
   return { queue, kpis };
 }

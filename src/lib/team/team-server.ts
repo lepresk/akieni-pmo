@@ -1,9 +1,11 @@
 import { asc, avg, eq } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
+import { writeAuditLog } from '@/lib/audit/audit-server';
 import { db } from '@/lib/db';
 import { departments, employees, planLoad } from '@/lib/db/schema';
 import { canSalary, type Role } from '@/lib/rbac';
+import { getSession } from '@/lib/session';
 
 /** Data reads for the team directory. Server-only. */
 
@@ -48,6 +50,17 @@ export async function getTeam(role: Role, employeeId: string | null): Promise<re
   const scoped =
     role === 'manager' && employeeId ? rows.filter((row) => row.managerId === employeeId) : rows;
   const showSalary = canSalary(role);
+
+  if (showSalary) {
+    const session = await getSession();
+    await writeAuditLog({
+      who: session.user.name,
+      role,
+      action: 'salary.read',
+      target: 'team.directory',
+      sensitive: true,
+    });
+  }
 
   return scoped.map((row) => ({
     id: row.id,

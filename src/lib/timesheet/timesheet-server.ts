@@ -1,7 +1,9 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 
 import { db } from '@/lib/db';
-import { activities, costCenters, projects } from '@/lib/db/schema';
+import { activities, costCenters, projects, submissions } from '@/lib/db/schema';
+import { normalizeSubmissionLine } from '@/lib/timesheet/normalize-submission-line';
+import type { TimesheetLineInput } from '@/lib/timesheet/timesheet-schemas';
 
 /** Options for the timesheet entry grid: open projects, their cost centers and activities. */
 
@@ -13,6 +15,50 @@ export interface PosteOption {
 export interface ProjectOption {
   readonly project: string;
   readonly postes: readonly PosteOption[];
+}
+
+/**
+ * Pending draft lines for an employee week, normalized to day-hours.
+ * Returns an empty array when no pending submission exists.
+ */
+export async function getTimesheetWeekDraft(
+  employeeId: string,
+  weekStart: string,
+): Promise<readonly TimesheetLineInput[]> {
+  const [row] = await db
+    .select({ lines: submissions.lines })
+    .from(submissions)
+    .where(
+      and(
+        eq(submissions.employeeId, employeeId),
+        eq(submissions.weekStart, weekStart),
+        eq(submissions.status, 'pending'),
+      ),
+    )
+    .limit(1);
+
+  if (!row) return [];
+
+  const draft: TimesheetLineInput[] = [];
+  for (const raw of row.lines) {
+    const line = normalizeSubmissionLine(raw);
+    if (!line) continue;
+    draft.push({
+      project: line.project,
+      poste: line.poste,
+      activity: line.activity,
+      hours: [
+        line.hours[0],
+        line.hours[1],
+        line.hours[2],
+        line.hours[3],
+        line.hours[4],
+        line.hours[5],
+        line.hours[6],
+      ],
+    });
+  }
+  return draft;
 }
 
 export async function getProjectOptions(): Promise<readonly ProjectOption[]> {

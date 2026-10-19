@@ -351,16 +351,19 @@ export const NATURE_MAP: Readonly<Record<string, 'program' | 'simple'>> = {
   simple: 'simple',
 };
 
-export const PLAN_WEEKS: readonly string[] = [
-  'S31',
-  'S32',
-  'S33',
-  'S34',
-  'S35',
-  'S36',
-  'S37',
-  'S38',
-];
+import { getWeekSnapshot, shiftWeekSnapshot } from '@/lib/calendar/week-display';
+
+/** Eight ISO week codes starting at the current week (computed at seed/import time). */
+export function buildPlanWeeks(now: Date = new Date()): readonly string[] {
+  const start = getWeekSnapshot(now);
+  return Array.from({ length: 8 }, (_, index) => {
+    const snap = index === 0 ? start : shiftWeekSnapshot(start.mondayIso, index);
+    return snap.shortLabel;
+  });
+}
+
+/** @deprecated Prefer buildPlanWeeks(); kept as a call-site alias for seed.ts */
+export const PLAN_WEEKS: readonly string[] = buildPlanWeeks();
 
 export interface PlanSeed {
   readonly name: string;
@@ -379,8 +382,8 @@ export const PLAN: readonly PlanSeed[] = [
 export interface SubmissionLineSeed {
   readonly project: string;
   readonly poste: string;
-  readonly task: string;
-  readonly hours: number;
+  readonly activity: string;
+  readonly hours: readonly [number, number, number, number, number, number, number];
 }
 
 export interface SubmissionSeed {
@@ -388,6 +391,8 @@ export interface SubmissionSeed {
   readonly department: string;
   readonly manager: string;
   readonly week: string;
+  /** Offset in ISO weeks from current Monday (negative = past). */
+  readonly weekOffset: number;
   readonly hours: number;
   readonly billable: number;
   readonly status: 'pending' | 'validated' | 'rejected';
@@ -401,7 +406,8 @@ export const SUBMISSIONS: readonly SubmissionSeed[] = [
     person: 'Josué Tchibinda',
     department: 'Dev',
     manager: 'Yann Massamba',
-    week: 'S30 · 20 → 26 juil.',
+    week: 'semaine précédente',
+    weekOffset: -1,
     hours: 38.5,
     billable: 36,
     status: 'pending',
@@ -411,20 +417,20 @@ export const SUBMISSIONS: readonly SubmissionSeed[] = [
       {
         project: 'SFEC · Facturation électronique',
         poste: 'Développement',
-        task: 'Développement des API métier',
-        hours: 28,
+        activity: 'Développement des API métier',
+        hours: [8, 8, 8, 4, 0, 0, 0],
       },
       {
         project: 'SFEC · Facturation électronique',
         poste: 'Recette / QA',
-        task: 'Recette fonctionnelle',
-        hours: 8.5,
+        activity: 'Recette fonctionnelle',
+        hours: [0, 0, 0, 4, 4.5, 0, 0],
       },
       {
         project: 'Interne · Académie',
         poste: 'Formation interne',
-        task: 'Académie interne',
-        hours: 2,
+        activity: 'Académie interne',
+        hours: [0, 0, 0, 0, 2, 0, 0],
       },
     ],
   },
@@ -432,7 +438,8 @@ export const SUBMISSIONS: readonly SubmissionSeed[] = [
     person: 'Grâce Loemba',
     department: 'Consulting',
     manager: 'Yann Massamba',
-    week: 'S30 · 20 → 26 juil.',
+    week: 'semaine précédente',
+    weekOffset: -1,
     hours: 45,
     billable: 45,
     status: 'pending',
@@ -442,14 +449,14 @@ export const SUBMISSIONS: readonly SubmissionSeed[] = [
       {
         project: 'CAMU · Couverture santé',
         poste: 'Analyse fonctionnelle',
-        task: 'Ateliers de cadrage',
-        hours: 22,
+        activity: 'Ateliers de cadrage',
+        hours: [8, 8, 6, 0, 0, 0, 0],
       },
       {
         project: 'AkieniPay · Mobile Money',
         poste: 'Intégration',
-        task: 'Connecteurs opérateurs',
-        hours: 23,
+        activity: 'Connecteurs opérateurs',
+        hours: [0, 0, 2, 8, 8, 5, 0],
       },
     ],
   },
@@ -457,7 +464,8 @@ export const SUBMISSIONS: readonly SubmissionSeed[] = [
     person: 'Prisca Kouka',
     department: 'Support',
     manager: 'Yann Massamba',
-    week: 'S30 · 20 → 26 juil.',
+    week: 'semaine précédente',
+    weekOffset: -1,
     hours: 21,
     billable: 14,
     status: 'pending',
@@ -467,14 +475,14 @@ export const SUBMISSIONS: readonly SubmissionSeed[] = [
       {
         project: 'CNSS · GED & ePayment',
         poste: 'Support N2',
-        task: 'Traitement des tickets N2',
-        hours: 14,
+        activity: 'Traitement des tickets N2',
+        hours: [7, 7, 0, 0, 0, 0, 0],
       },
       {
         project: 'Interne · Académie',
         poste: 'Formation interne',
-        task: 'Académie interne',
-        hours: 7,
+        activity: 'Académie interne',
+        hours: [0, 0, 7, 0, 0, 0, 0],
       },
     ],
   },
@@ -482,7 +490,8 @@ export const SUBMISSIONS: readonly SubmissionSeed[] = [
     person: 'Yann Massamba',
     department: 'Dev',
     manager: 'Sandrine Okemba',
-    week: 'S30 · 20 → 26 juil.',
+    week: 'semaine précédente',
+    weekOffset: -1,
     hours: 41,
     billable: 39,
     status: 'validated',
@@ -492,14 +501,14 @@ export const SUBMISSIONS: readonly SubmissionSeed[] = [
       {
         project: 'SFEC · Facturation électronique',
         poste: 'Développement',
-        task: 'Intégration front',
-        hours: 24,
+        activity: 'Intégration front',
+        hours: [8, 8, 8, 0, 0, 0, 0],
       },
       {
         project: 'CNSS · GED & ePayment',
         poste: 'Développement',
-        task: 'Développement des API métier',
-        hours: 17,
+        activity: 'Développement des API métier',
+        hours: [0, 0, 0, 8, 9, 0, 0],
       },
     ],
   },
@@ -507,7 +516,8 @@ export const SUBMISSIONS: readonly SubmissionSeed[] = [
     person: 'Nadia Ibara',
     department: 'Consulting',
     manager: 'Yann Massamba',
-    week: 'S30 · 20 → 26 juil.',
+    week: 'semaine précédente',
+    weekOffset: -1,
     hours: 12,
     billable: 0,
     status: 'rejected',
@@ -517,8 +527,8 @@ export const SUBMISSIONS: readonly SubmissionSeed[] = [
       {
         project: 'Interne · Académie & avant-vente',
         poste: 'Avant-vente',
-        task: "Réponses aux appels d'offres",
-        hours: 12,
+        activity: "Réponses aux appels d'offres",
+        hours: [8, 4, 0, 0, 0, 0, 0],
       },
     ],
   },
@@ -527,8 +537,8 @@ export const SUBMISSIONS: readonly SubmissionSeed[] = [
 export interface LeaveSeed {
   readonly person: string;
   readonly type: string;
-  readonly from: string;
-  readonly to: string;
+  readonly fromDate: string;
+  readonly toDate: string;
   readonly days: number;
   readonly status: 'pending' | 'validated' | 'rejected';
   readonly note: string;
@@ -538,8 +548,8 @@ export const LEAVES: readonly LeaveSeed[] = [
   {
     person: 'Josué Tchibinda',
     type: 'Congé payé',
-    from: '12 août',
-    to: '23 août',
+    fromDate: '2026-08-12',
+    toDate: '2026-08-23',
     days: 10,
     status: 'pending',
     note: 'Solde après demande : 8,5 j',
@@ -547,8 +557,8 @@ export const LEAVES: readonly LeaveSeed[] = [
   {
     person: 'Prisca Kouka',
     type: 'Maladie',
-    from: '28 juil.',
-    to: '29 juil.',
+    fromDate: '2026-07-28',
+    toDate: '2026-07-29',
     days: 2,
     status: 'pending',
     note: 'Certificat médical joint',
@@ -556,8 +566,8 @@ export const LEAVES: readonly LeaveSeed[] = [
   {
     person: 'Grâce Loemba',
     type: 'Congé payé',
-    from: '01 sept.',
-    to: '05 sept.',
+    fromDate: '2026-09-01',
+    toDate: '2026-09-05',
     days: 5,
     status: 'validated',
     note: 'Validé par Blaise Mabiala · capacité ajustée',
@@ -565,8 +575,8 @@ export const LEAVES: readonly LeaveSeed[] = [
   {
     person: 'Yann Massamba',
     type: 'Congé sans solde',
-    from: '15 juil.',
-    to: '16 juil.',
+    fromDate: '2026-07-15',
+    toDate: '2026-07-16',
     days: 2,
     status: 'rejected',
     note: 'Refusé : jalon Charge 1 500 req/s la même semaine',
@@ -626,7 +636,7 @@ export const EXPENSES: readonly ExpenseSeed[] = [
   {
     nature: 'achat',
     project: 'CNSS · GED & ePayment',
-    sub: '—',
+    sub: '-',
     poste: 'Biométrie',
     label: 'Capteurs biométriques · 40 unités',
     supplier: 'IDEMIA',
@@ -638,7 +648,7 @@ export const EXPENSES: readonly ExpenseSeed[] = [
   {
     nature: 'achat',
     project: 'AkieniPay · Mobile Money',
-    sub: '—',
+    sub: '-',
     poste: 'Intégration',
     label: 'Certification PCI-DSS',
     supplier: 'Deloitte',
@@ -698,7 +708,7 @@ export const EXPENSES: readonly ExpenseSeed[] = [
   {
     nature: 'achat',
     project: 'CNSS · GED & ePayment',
-    sub: '—',
+    sub: '-',
     poste: 'Déploiement',
     label: 'Transport capteurs · 6 agences',
     supplier: 'Bolloré Logistics',
@@ -722,7 +732,7 @@ export const EXPENSES: readonly ExpenseSeed[] = [
   {
     nature: 'achat',
     project: 'CarTracking · Flotte SNPC',
-    sub: '—',
+    sub: '-',
     poste: 'Déploiement',
     label: 'Boîtiers GPS · 120 unités',
     supplier: 'Teltonika',
@@ -800,7 +810,7 @@ export interface InvoiceSeed {
   readonly model: string;
   readonly quantity: string;
   readonly amount: string;
-  readonly status: string;
+  readonly status: 'draft' | 'validated' | 'issued' | 'cancelled';
 }
 
 export const INVOICES: readonly InvoiceSeed[] = [
@@ -811,7 +821,7 @@ export const INVOICES: readonly InvoiceSeed[] = [
     model: 'Régie',
     quantity: '312 j',
     amount: 'XAF 214 M',
-    status: 'À valider',
+    status: 'validated',
   },
   {
     ref: 'PF-2608',
@@ -820,7 +830,7 @@ export const INVOICES: readonly InvoiceSeed[] = [
     model: 'Régie',
     quantity: '118 j',
     amount: 'XAF 78 M',
-    status: 'Brouillon',
+    status: 'draft',
   },
   {
     ref: 'PF-2609',
@@ -829,7 +839,7 @@ export const INVOICES: readonly InvoiceSeed[] = [
     model: 'Forfait',
     quantity: 'Jalon 2',
     amount: 'XAF 120 M',
-    status: 'Validée',
+    status: 'validated',
   },
   {
     ref: 'PF-2610',
@@ -838,7 +848,7 @@ export const INVOICES: readonly InvoiceSeed[] = [
     model: 'Forfait',
     quantity: 'Jalon 1',
     amount: 'XAF 45 M',
-    status: 'Envoyée',
+    status: 'issued',
   },
   {
     ref: 'PF-2611',
@@ -847,7 +857,7 @@ export const INVOICES: readonly InvoiceSeed[] = [
     model: 'Régie',
     quantity: '41 j',
     amount: 'XAF 28 M',
-    status: 'Brouillon',
+    status: 'draft',
   },
 ];
 

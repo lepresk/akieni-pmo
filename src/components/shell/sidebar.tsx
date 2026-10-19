@@ -8,12 +8,29 @@ import type { ReactElement } from 'react';
 import { Icon } from '@/components/icons';
 import { MonoLabel, StatusDot } from '@/components/ui';
 import { getWeekSnapshot } from '@/lib/calendar/week-display';
-import { NAV_ITEMS } from '@/lib/navigation';
 import { cn } from '@/lib/cn';
+import { NAV_ITEMS, SUBMISSION_WEEK_STATUS_LABELS, WEEK_STATUS_BADGE_KEY } from '@/lib/navigation';
+import type { SubmissionWeekStatus } from '@/lib/timesheet/submission-week-status';
+
+function isSubmissionWeekStatus(value: string | undefined): value is SubmissionWeekStatus {
+  return (
+    value === 'missing' || value === 'pending' || value === 'validated' || value === 'rejected'
+  );
+}
+
+function statusDotTone(status: SubmissionWeekStatus): 'urgent' | 'accent' | 'success' {
+  if (status === 'validated') return 'success';
+  if (status === 'missing' || status === 'rejected') return 'urgent';
+  return 'accent';
+}
 
 export function Sidebar({ badges }: { readonly badges: Record<string, string> }): ReactElement {
   const pathname = usePathname();
   const week = getWeekSnapshot();
+  const weekStatus = isSubmissionWeekStatus(badges[WEEK_STATUS_BADGE_KEY])
+    ? badges[WEEK_STATUS_BADGE_KEY]
+    : 'missing';
+  const weekStatusLabel = SUBMISSION_WEEK_STATUS_LABELS[weekStatus];
 
   return (
     <aside className="border-line bg-off-black sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r">
@@ -56,8 +73,8 @@ export function Sidebar({ badges }: { readonly badges: Record<string, string> })
       <div className="border-line flex flex-col gap-1.5 border-t px-5 py-4">
         <MonoLabel tone="onDark">{week.shortLabel} · statut</MonoLabel>
         <div className="flex items-center gap-2 text-[13px] text-white">
-          <StatusDot tone="accent" />
-          <span>Saisie en cours</span>
+          <StatusDot tone={statusDotTone(weekStatus)} />
+          <span>{weekStatusLabel}</span>
         </div>
         <MonoLabel tone="onDark" className="mt-1.5">
           {week.rangeLabel}

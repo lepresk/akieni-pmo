@@ -3,7 +3,7 @@ import { asc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { auditLog } from '@/lib/db/schema';
 
-/** Data reads for the audit log. Server-only. */
+/** Data reads and append-only writes for the audit log. Server-only. */
 
 export interface AuditRow {
   readonly id: string;
@@ -13,6 +13,33 @@ export interface AuditRow {
   readonly action: string;
   readonly target: string;
   readonly sensitive: boolean;
+}
+
+export interface WriteAuditLogInput {
+  /** Actor display name or user id written to the `who` column. */
+  readonly who?: string;
+  /** Alias for `who` when the caller has a user id rather than a display name. */
+  readonly actorUserId?: string;
+  readonly role: string;
+  readonly action: string;
+  readonly target: string;
+  readonly sensitive: boolean;
+}
+
+/**
+ * Append one audit entry. Sensitive reads (salary, margin) and RH/finance mutations
+ * must call this before returning serialized data or after a successful state change.
+ */
+export async function writeAuditLog(input: WriteAuditLogInput): Promise<void> {
+  const who = input.who ?? input.actorUserId ?? '-';
+  await db.insert(auditLog).values({
+    at: new Date().toISOString(),
+    who,
+    role: input.role,
+    action: input.action,
+    target: input.target,
+    sensitive: input.sensitive,
+  });
 }
 
 export async function getAudit(): Promise<readonly AuditRow[]> {

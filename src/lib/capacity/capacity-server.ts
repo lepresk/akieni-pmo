@@ -3,6 +3,8 @@ import { asc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { departments, employees, planLoad } from '@/lib/db/schema';
 
+export { resolvePlanWeekLabel } from '@/lib/capacity/plan-week-label';
+
 /** Data reads for the capacity plan (person x week). Server-only. */
 
 export interface PlanRow {
@@ -16,6 +18,23 @@ export interface PlanRow {
 export interface CapacityData {
   readonly weekCodes: readonly string[];
   readonly rows: readonly PlanRow[];
+}
+
+/** Distinct ISO week codes from plan_load, ordered by weekIndex. */
+export async function getPlanWeekCodes(): Promise<readonly string[]> {
+  const rows = await db
+    .select({ weekCode: planLoad.weekCode, weekIndex: planLoad.weekIndex })
+    .from(planLoad)
+    .orderBy(asc(planLoad.weekIndex));
+
+  const codes: string[] = [];
+  const seen = new Set<number>();
+  for (const row of rows) {
+    if (seen.has(row.weekIndex)) continue;
+    seen.add(row.weekIndex);
+    codes.push(row.weekCode);
+  }
+  return codes;
 }
 
 export async function getPlan(): Promise<CapacityData> {
@@ -34,10 +53,14 @@ export async function getPlan(): Promise<CapacityData> {
     .orderBy(asc(employees.fullName), asc(planLoad.weekIndex));
 
   const weekCodes: string[] = [];
+  const seenWeeks = new Set<number>();
   const byEmployee = new Map<string, PlanRow & { weeks: { code: string; pct: number }[] }>();
 
   for (const row of rows) {
-    if (!weekCodes.includes(row.weekCode)) weekCodes.push(row.weekCode);
+    if (!seenWeeks.has(row.weekIndex)) {
+      seenWeeks.add(row.weekIndex);
+      weekCodes.push(row.weekCode);
+    }
     let entry = byEmployee.get(row.employeeId);
     if (!entry) {
       entry = {

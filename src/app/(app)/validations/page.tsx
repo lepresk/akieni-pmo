@@ -19,6 +19,7 @@ import {
   validateSubmission,
 } from '@/lib/validations/validations-actions';
 import { getSubmissions } from '@/lib/validations/validations-server';
+import { STANDARD_WEEK_HOURS } from '@/lib/validations/submission-flags';
 
 export default async function ValidationsPage(): Promise<ReactElement> {
   const { role, user } = await getSession();
@@ -59,7 +60,7 @@ export default async function ValidationsPage(): Promise<ReactElement> {
       </div>
 
       {rows.map((row) => {
-        const gap = row.hours - 40;
+        const gap = row.hours - STANDARD_WEEK_HOURS;
         const gapLabel = gap === 0 ? 'conforme' : `${gap > 0 ? '+' : ''}${gap} h`;
         return (
           <Card key={row.id} padding="none">
@@ -110,9 +111,11 @@ export default async function ValidationsPage(): Promise<ReactElement> {
               {row.lines.map((line, index) => (
                 <div key={`${row.id}-${index}`} className="flex justify-between text-[12px]">
                   <span className="text-muted">
-                    {line.project} · {line.poste} · {line.task}
+                    {line.project} · {line.poste} · {line.activity}
                   </span>
-                  <span className="font-mono">{line.hours} h</span>
+                  <span className="font-mono">
+                    {line.hours.reduce((sum, cell) => sum + cell, 0)} h
+                  </span>
                 </div>
               ))}
             </div>

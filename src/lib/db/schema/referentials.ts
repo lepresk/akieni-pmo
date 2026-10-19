@@ -7,6 +7,7 @@ export const costCenterCatalog = pgTable('cost_center_catalog', {
   id: uuid('id').defaultRandom().primaryKey(),
   label: varchar('label', { length: 120 }).notNull().unique(),
   billable: boolean('billable').notNull().default(true),
+  active: boolean('active').notNull().default(true),
 });
 
 /**

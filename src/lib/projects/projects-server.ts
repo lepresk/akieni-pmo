@@ -1,8 +1,11 @@
 import { asc, eq } from 'drizzle-orm';
 
+import { writeAuditLog } from '@/lib/audit/audit-server';
 import { db } from '@/lib/db';
 import { clients, employees, projects } from '@/lib/db/schema';
+import { sumValidatedDaysByProjectName } from '@/lib/projects/project-spent';
 import { canMargin, type Role } from '@/lib/rbac';
+import { getSession } from '@/lib/session';
 
 /** Data reads for the project portfolio. Server-only (owns Drizzle queries). */
 
@@ -24,28 +27,41 @@ export async function getPortfolio(
   role: Role,
   employeeId: string | null,
 ): Promise<readonly PortfolioRow[]> {
-  const rows = await db
-    .select({
-      id: projects.id,
-      code: projects.code,
-      name: projects.name,
-      segment: projects.segment,
-      model: projects.model,
-      budgetDays: projects.budgetDays,
-      spentDays: projects.spentDays,
-      costLoad: projects.costLoad,
-      clientName: clients.name,
-      pmName: employees.fullName,
-      pmId: projects.pmEmployeeId,
-    })
-    .from(projects)
-    .leftJoin(clients, eq(projects.clientId, clients.id))
-    .leftJoin(employees, eq(projects.pmEmployeeId, employees.id))
-    .orderBy(asc(projects.code));
+  const [rows, spentByName] = await Promise.all([
+    db
+      .select({
+        id: projects.id,
+        code: projects.code,
+        name: projects.name,
+        segment: projects.segment,
+        model: projects.model,
+        budgetDays: projects.budgetDays,
+        costLoad: projects.costLoad,
+        clientName: clients.name,
+        pmName: employees.fullName,
+        pmId: projects.pmEmployeeId,
+      })
+      .from(projects)
+      .leftJoin(clients, eq(projects.clientId, clients.id))
+      .leftJoin(employees, eq(projects.pmEmployeeId, employees.id))
+      .orderBy(asc(projects.code)),
+    sumValidatedDaysByProjectName(),
+  ]);
 
   // Row-level scope: a PM only sees the projects they lead.
   const scoped = role === 'pm' && employeeId ? rows.filter((row) => row.pmId === employeeId) : rows;
   const showMargin = canMargin(role);
+
+  if (showMargin) {
+    const session = await getSession();
+    await writeAuditLog({
+      who: session.user.name,
+      role,
+      action: 'margin.read',
+      target: 'portfolio',
+      sensitive: true,
+    });
+  }
 
   return scoped.map((row) => ({
     id: row.id,
@@ -56,7 +72,7 @@ export async function getPortfolio(
     model: row.model,
     pmName: row.pmName ?? '-',
     budgetDays: row.budgetDays,
-    spentDays: row.spentDays,
+    spentDays: Math.round(spentByName.get(row.name) ?? 0),
     costLoad: showMargin && row.costLoad !== null ? Number(row.costLoad) : null,
   }));
 }

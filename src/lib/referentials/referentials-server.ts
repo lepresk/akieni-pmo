@@ -1,4 +1,4 @@
-import { asc, countDistinct, desc } from 'drizzle-orm';
+import { asc, countDistinct, desc, eq } from 'drizzle-orm';
 
 import { db } from '@/lib/db';
 import { costCenterCatalog, costCenters, holidays, rateGrid } from '@/lib/db/schema';
@@ -27,6 +27,7 @@ export async function getRateGrid(): Promise<readonly RateRow[]> {
 }
 
 export interface CostCenterRow {
+  readonly id: string;
   readonly label: string;
   readonly billable: boolean;
   readonly usage: number;
@@ -34,8 +35,13 @@ export interface CostCenterRow {
 
 export async function getCostCenterCatalog(): Promise<readonly CostCenterRow[]> {
   const catalog = await db
-    .select({ label: costCenterCatalog.label, billable: costCenterCatalog.billable })
+    .select({
+      id: costCenterCatalog.id,
+      label: costCenterCatalog.label,
+      billable: costCenterCatalog.billable,
+    })
     .from(costCenterCatalog)
+    .where(eq(costCenterCatalog.active, true))
     .orderBy(asc(costCenterCatalog.label));
 
   const usageRows = await db
@@ -46,6 +52,7 @@ export async function getCostCenterCatalog(): Promise<readonly CostCenterRow[]> 
   const usageByLabel = new Map(usageRows.map((row) => [row.label, Number(row.projects)]));
 
   return catalog.map((row) => ({
+    id: row.id,
     label: row.label,
     billable: row.billable,
     usage: usageByLabel.get(row.label) ?? 0,

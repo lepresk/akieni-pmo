@@ -15,7 +15,10 @@ import {
   expenses,
   holidays,
   invoices,
+  leaveBalances,
   leaves,
+  notificationRules,
+  notifications,
   planLoad,
   projectEnvelopes,
   projectNodes,
@@ -28,6 +31,7 @@ import {
   ACT_PLAN,
   AMENDMENTS,
   AUDIT,
+  buildPlanWeeks,
   EXPENSES,
   HOLIDAYS,
   INVOICES,
@@ -36,7 +40,6 @@ import {
   NATURE_MAP,
   NON_BILLABLE_POSTES,
   PLAN,
-  PLAN_WEEKS,
   POSTE_CATALOG,
   PROJECT_ENVELOPES,
   PROJECTS,
@@ -47,6 +50,13 @@ import {
   STAFF,
   SUBMISSIONS,
 } from './seed-data';
+import { formatDateLabelFr } from '@/lib/calendar/date-label-fr';
+import {
+  getWeekSnapshot,
+  shiftWeekSnapshot,
+  submissionWeekLabel,
+} from '@/lib/calendar/week-display';
+import type { InvoiceStatus } from '@/lib/db/schema/billing';
 
 // The seed runs via tsx (outside Next), so load the local env explicitly.
 import { config } from 'dotenv';
@@ -107,6 +117,9 @@ async function main(): Promise<void> {
   log(`Seeding ${connectionString.replace(/:[^:@/]*@/, ':***@')}`);
 
   // 1. Reset seeded tables (FK-safe order).
+  await db.delete(notificationRules);
+  await db.delete(notifications);
+  await db.delete(leaveBalances);
   await db.delete(users);
   await db.delete(activities);
   await db.delete(assignments);
@@ -127,6 +140,9 @@ async function main(): Promise<void> {
   await db.delete(invoices);
   await db.delete(employees);
   await db.delete(departments);
+
+  const planWeeks = buildPlanWeeks();
+  const currentWeek = getWeekSnapshot();
 
   // 2. Build the merged people set (role users + staff + project PMs).
   const people = new Map<string, Person>();
@@ -205,28 +221,35 @@ async function main(): Promise<void> {
     const employeeId = employeeIdByName.get(person.name);
     if (!employeeId) continue;
     for (let index = 0; index < person.load.length; index += 1) {
-      const weekCode = PLAN_WEEKS[index];
+      const weekCode = planWeeks[index];
       const pct = person.load[index];
       if (weekCode === undefined || pct === undefined) continue;
       await db.insert(planLoad).values({ employeeId, weekCode, weekIndex: index, pct });
     }
   }
-  log(`Plan load: ${PLAN.length} people x ${PLAN_WEEKS.length} weeks`);
+  log(`Plan load: ${PLAN.length} people x ${planWeeks.length} weeks`);
 
   // Submissions, leaves, expenses.
   for (const sub of SUBMISSIONS) {
+    const weekSnap = shiftWeekSnapshot(currentWeek.mondayIso, sub.weekOffset);
     await db.insert(submissions).values({
       employeeId: employeeIdByName.get(sub.person) ?? null,
       personName: sub.person,
       department: sub.department,
       managerName: sub.manager,
-      weekLabel: sub.week,
+      weekStart: weekSnap.mondayIso,
+      weekLabel: submissionWeekLabel(weekSnap),
       hours: sub.hours,
       billable: sub.billable,
       status: sub.status,
       motif: sub.motif,
       flags: [...sub.flags],
-      lines: sub.lines.map((line) => ({ ...line })),
+      lines: sub.lines.map((line) => ({
+        project: line.project,
+        poste: line.poste,
+        activity: line.activity,
+        hours: [...line.hours] as [number, number, number, number, number, number, number],
+      })),
     });
   }
   for (const leave of LEAVES) {
@@ -234,8 +257,10 @@ async function main(): Promise<void> {
       employeeId: employeeIdByName.get(leave.person) ?? null,
       personName: leave.person,
       type: leave.type,
-      fromLabel: leave.from,
-      toLabel: leave.to,
+      fromDate: leave.fromDate,
+      toDate: leave.toDate,
+      fromLabel: formatDateLabelFr(leave.fromDate),
+      toLabel: formatDateLabelFr(leave.toDate),
       days: leave.days,
       status: leave.status,
       note: leave.note,
@@ -245,13 +270,14 @@ async function main(): Promise<void> {
     await db.insert(expenses).values({
       nature: exp.nature,
       projectName: exp.project,
-      sub: exp.sub,
+      sub: exp.sub === '-' ? null : exp.sub,
       poste: exp.poste,
       label: exp.label,
       supplier: exp.supplier,
       amount: exp.amount,
       state: exp.state,
       billable: exp.billable,
+      expenseDate: null,
       dateLabel: exp.date,
     });
   }
@@ -270,20 +296,49 @@ async function main(): Promise<void> {
       model: invoice.model,
       quantityLabel: invoice.quantity,
       amountLabel: invoice.amount,
-      status: invoice.status,
+      status: invoice.status as InvoiceStatus,
     });
   }
   log(`Audit: ${AUDIT.length} entries, Invoices: ${INVOICES.length}`);
 
-  // 5. Users (one per demo role).
+  // 5. Users (one per demo role) + default notification rules + leave balances.
+  const DEFAULT_NOTIF_RULES = [
+    { key: 'timesheet_due', label: 'Rappel saisie non soumise', enabled: true },
+    { key: 'validation_pending', label: 'Feuille à valider', enabled: true },
+    { key: 'leave_decision', label: 'Décision congés', enabled: true },
+    { key: 'budget_alert', label: 'Alerte budget projet', enabled: false },
+  ] as const;
+  const balanceYear = currentWeek.isoYear;
+
   for (const roleUser of ROLE_USERS) {
-    await db.insert(users).values({
-      email: `${slug(roleUser.name)}@akieni.com`,
-      role: roleUser.role,
-      employeeId: employeeIdByName.get(roleUser.name) ?? null,
-    });
+    const employeeId = employeeIdByName.get(roleUser.name) ?? null;
+    const [userRow] = await db
+      .insert(users)
+      .values({
+        email: `${slug(roleUser.name)}@akieni.com`,
+        role: roleUser.role,
+        employeeId,
+      })
+      .returning({ id: users.id });
+    if (!userRow) throw new Error(`Failed to insert user ${roleUser.name}`);
+    for (const rule of DEFAULT_NOTIF_RULES) {
+      await db.insert(notificationRules).values({
+        userId: userRow.id,
+        key: rule.key,
+        label: rule.label,
+        enabled: rule.enabled,
+      });
+    }
+    if (employeeId) {
+      await db.insert(leaveBalances).values({
+        employeeId,
+        year: balanceYear,
+        acquiredDays: 18.5,
+        takenDays: 9,
+      });
+    }
   }
-  log(`Users: ${ROLE_USERS.length}`);
+  log(`Users: ${ROLE_USERS.length} (+ notification rules, leave balances)`);
 
   // 6. Clients.
   const clientNames = new Set(PROJECTS.map((project) => project.client));

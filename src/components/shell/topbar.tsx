@@ -11,9 +11,11 @@ import { setRole } from '@/lib/session-actions';
 interface TopbarProps {
   readonly role: Role;
   readonly user: { readonly name: string; readonly department: string; readonly initials: string };
+  /** When true, show the demo role switcher; when false (SSO on), hide it. */
+  readonly demoMode: boolean;
 }
 
-export function Topbar({ role, user }: TopbarProps): ReactElement {
+export function Topbar({ role, user, demoMode }: TopbarProps): ReactElement {
   const pathname = usePathname();
   const formRef = useRef<HTMLFormElement>(null);
   const title = SCREEN_TITLES[pathname] ?? '';
@@ -32,27 +34,29 @@ export function Topbar({ role, user }: TopbarProps): ReactElement {
         ) : null}
       </div>
 
-      <form
-        ref={formRef}
-        action={setRole}
-        className="border-line-light flex shrink-0 items-center gap-2 border bg-white py-1.5 pr-2 pl-3"
-      >
-        <MonoLabel>Rôle actif</MonoLabel>
-        <select
-          key={role}
-          name="role"
-          defaultValue={role}
-          aria-label="Sélecteur de rôle"
-          onChange={() => formRef.current?.requestSubmit()}
-          className="text-ink cursor-pointer border-none bg-transparent py-1 text-[14px] font-medium outline-none"
+      {demoMode ? (
+        <form
+          ref={formRef}
+          action={setRole}
+          className="border-line-light flex shrink-0 items-center gap-2 border bg-white py-1.5 pr-2 pl-3"
         >
-          {ROLES.map((value) => (
-            <option key={value} value={value}>
-              {ROLE_LABELS[value]}
-            </option>
-          ))}
-        </select>
-      </form>
+          <MonoLabel>Rôle actif (démo)</MonoLabel>
+          <select
+            key={role}
+            name="role"
+            defaultValue={role}
+            aria-label="Sélecteur de rôle"
+            onChange={() => formRef.current?.requestSubmit()}
+            className="text-ink cursor-pointer border-none bg-transparent py-1 text-[14px] font-medium outline-none"
+          >
+            {ROLES.map((value) => (
+              <option key={value} value={value}>
+                {ROLE_LABELS[value]}
+              </option>
+            ))}
+          </select>
+        </form>
+      ) : null}
 
       <div className="border-line-light flex shrink-0 items-center gap-2.5 border-l pl-4">
         <Avatar initials={user.initials} />

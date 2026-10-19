@@ -27,7 +27,11 @@ import { cn } from '@/lib/cn';
 import { marginColor, marginFromCostLoad, modelLabel, pct, segmentLabel, xaf } from '@/lib/display';
 import { approveAmendment, createAmendment } from '@/lib/projects/amendments-actions';
 import { getProjectHub } from '@/lib/projects/project-detail-server';
-import { canEditBudget, canMargin } from '@/lib/rbac';
+import {
+  updateActivityProgressForm,
+  updateAssignmentAllocationForm,
+} from '@/lib/projects/project-structure-actions';
+import { canEdit, canEditBudget, canMargin } from '@/lib/rbac';
 import { getSession } from '@/lib/session';
 
 const NATURE_LABELS: Readonly<Record<string, string>> = {
@@ -39,9 +43,7 @@ type Tab =
   'apercu' | 'sousprojets' | 'planning' | 'temps' | 'ressources' | 'budget' | 'atterrissage';
 
 const NODE_COLUMNS = '1fr auto';
-const PLANNING_COLUMNS = '1fr 50px 90px 44px';
 const TIME_COLUMNS = '1.4fr 1.2fr 1.8fr 0.6fr';
-const RESOURCE_COLUMNS = '2fr 1fr 1fr 1fr';
 const COMPLETE_PROGRESS_PCT = 100;
 
 export default async function ProjectHubPage({
@@ -54,6 +56,7 @@ export default async function ProjectHubPage({
   const { id } = await params;
   const query = await searchParams;
   const { role } = await getSession();
+  const editable = canEdit(role);
   const scope = query.node ?? null;
   const hub = await getProjectHub(id, role, scope);
 
@@ -85,6 +88,9 @@ export default async function ProjectHubPage({
   const eac = hub.spentDays + hub.etcDays;
   const gap = eac - hub.budgetDays;
 
+  const planningColumns = editable ? '1fr 50px 90px 130px' : '1fr 50px 90px 44px';
+  const resourceColumns = editable ? '2fr 1.4fr 1fr 1fr' : '2fr 1fr 1fr 1fr';
+
   return (
     <PageSection>
       <Card padding="none" className="px-6 py-[22px]">
@@ -109,23 +115,28 @@ export default async function ProjectHubPage({
       <Tabs items={tabItems} activeKey={tab} className="flex-wrap" />
 
       {tab === 'apercu' && (
-        <KpiGrid>
-          {[
-            { label: 'Client', value: hub.clientName },
-            { label: 'Segment', value: segmentLabel(hub.segment) },
-            { label: 'Modèle', value: modelLabel(hub.model) },
-            { label: 'Chef de projet', value: hub.pmName },
-            { label: 'Budget', value: `${scopedBudgetDays} j` },
-            { label: 'Postes de coût', value: String(hub.costCenters.length) },
-          ].map((fact) => (
-            <KpiTile
-              key={fact.label}
-              label={fact.label}
-              value={<span className="text-[15px] font-normal tracking-normal">{fact.value}</span>}
-              className="px-[22px] py-[18px]"
-            />
-          ))}
-        </KpiGrid>
+        <PageSection>
+          <MonoLabel>Consultation</MonoLabel>
+          <KpiGrid>
+            {[
+              { label: 'Client', value: hub.clientName },
+              { label: 'Segment', value: segmentLabel(hub.segment) },
+              { label: 'Modèle', value: modelLabel(hub.model) },
+              { label: 'Chef de projet', value: hub.pmName },
+              { label: 'Budget', value: `${scopedBudgetDays} j` },
+              { label: 'Postes de coût', value: String(hub.costCenters.length) },
+            ].map((fact) => (
+              <KpiTile
+                key={fact.label}
+                label={fact.label}
+                value={
+                  <span className="text-[15px] font-normal tracking-normal">{fact.value}</span>
+                }
+                className="px-[22px] py-[18px]"
+              />
+            ))}
+          </KpiGrid>
+        </PageSection>
       )}
 
       {tab === 'sousprojets' && (
@@ -154,16 +165,12 @@ export default async function ProjectHubPage({
 
       {tab === 'planning' && (
         <Card padding="none">
-          {hub.activities.map((act, index) => (
-            <DataTableRow
-              key={`${act.name}-${index}`}
-              columns={PLANNING_COLUMNS}
-              className="gap-x-3.5 py-[13px]"
-            >
+          {hub.activities.map((act) => (
+            <DataTableRow key={act.id} columns={planningColumns} className="gap-x-3.5 py-[13px]">
               <DataTableCell stack>
                 <span>{act.name}</span>
                 <span className="text-muted text-[11px]">
-                  {act.poste} · {act.responsible} · S{31 + act.fromWeek} → S{31 + act.toWeek}
+                  {act.poste} · {act.responsible ?? '-'} · {act.fromWeekLabel} → {act.toWeekLabel}
                 </span>
               </DataTableCell>
               <DataTableCell align="end" className="font-mono text-[12px]">
@@ -181,7 +188,28 @@ export default async function ProjectHubPage({
                 />
               </DataTableCell>
               <DataTableCell align="end" className="font-mono text-[12px]">
-                {act.progress} %
+                {editable ? (
+                  <form
+                    action={updateActivityProgressForm}
+                    className="flex items-center justify-end gap-1"
+                  >
+                    <input type="hidden" name="activityId" value={act.id} />
+                    <Input
+                      name="progress"
+                      type="number"
+                      min={0}
+                      max={100}
+                      defaultValue={act.progress}
+                      width={56}
+                      aria-label={`Avancement ${act.name}`}
+                    />
+                    <Button type="submit" className="px-2 py-1 text-[11px]">
+                      OK
+                    </Button>
+                  </form>
+                ) : (
+                  <>{act.progress} %</>
+                )}
               </DataTableCell>
             </DataTableRow>
           ))}
@@ -220,7 +248,7 @@ export default async function ProjectHubPage({
 
       {tab === 'ressources' && (
         <DataTable
-          columns={RESOURCE_COLUMNS}
+          columns={resourceColumns}
           header={
             <>
               <MonoLabel>Collaborateur</MonoLabel>
@@ -230,11 +258,29 @@ export default async function ProjectHubPage({
             </>
           }
         >
-          {hub.assignments.map((res, index) => (
-            <DataTableRow key={`${res.employeeName}-${index}`} columns={RESOURCE_COLUMNS}>
+          {hub.assignments.map((res) => (
+            <DataTableRow key={res.id} columns={resourceColumns}>
               <DataTableCell>{res.employeeName}</DataTableCell>
               <DataTableCell className="font-mono text-[12px]">
-                {pct(res.allocationPct)}
+                {editable ? (
+                  <form action={updateAssignmentAllocationForm} className="flex items-center gap-1">
+                    <input type="hidden" name="assignmentId" value={res.id} />
+                    <Input
+                      name="allocationPct"
+                      type="number"
+                      min={0}
+                      max={100}
+                      defaultValue={res.allocationPct}
+                      width={64}
+                      aria-label={`Allocation ${res.employeeName}`}
+                    />
+                    <Button type="submit" className="px-2 py-1 text-[11px]">
+                      OK
+                    </Button>
+                  </form>
+                ) : (
+                  pct(res.allocationPct)
+                )}
               </DataTableCell>
               <DataTableCell className="font-mono text-[12px]">
                 {res.projectTjm !== null ? xaf(res.projectTjm) : '-'}
